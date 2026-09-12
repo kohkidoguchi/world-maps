@@ -53,15 +53,29 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: cd corp_activity_map && python build.py
 
-      - name: Assemble site (web/ -> out/, summaries, screenshots, index)
+      # ── 組み立て：各工程のログを out/build.log に残し、Pages と一緒に公開する（サインイン不要で読める）
+      - name: Copy web/ -> out/
         run: |
           mkdir -p out/geo out/corp
           cp -r geopolitics_map/web/.   out/geo/
           cp -r corp_activity_map/web/. out/corp/
-          python tools/export_summary.py
-          python tools/render.py
-          python tools/make_index.py
-          du -sh out; ls -la out out/geo out/corp
+          echo "== build $(date -u +%FT%TZ) run=${{ github.run_id }} ==" > out/build.log
+          ls -la geopolitics_map/web corp_activity_map/web >> out/build.log 2>&1
+
+      - name: Export summaries
+        continue-on-error: true
+        run: python tools/export_summary.py 2>&1 | tee -a out/build.log
+
+      - name: Render screenshots (Playwright)
+        continue-on-error: true
+        run: python tools/render.py 2>&1 | tee -a out/build.log
+
+      - name: Build index page
+        continue-on-error: true
+        run: python tools/make_index.py 2>&1 | tee -a out/build.log
+
+      - name: Site tree
+        run: (du -sh out; find out -maxdepth 2 -type f -not -path '*/lib/*' -exec ls -la {} +) 2>&1 | tee -a out/build.log
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
