@@ -45,13 +45,35 @@ jobs:
           restore-keys: |
             maps-data-
 
+      # ── ビルド：ログは out/build.log に集約し、サイトと一緒に公開する（非ログインで読める）。
+      #    どちらかが失敗しても止めず、キャッシュ済みデータで組み立てを続ける。
+      - name: Start build log
+        run: |
+          mkdir -p out
+          echo "== build $(date -u +%FT%TZ) run=${{ github.run_id }} sha=${{ github.sha }} ==" > out/build.log
+
       - name: Build geopolitics map
-        run: cd geopolitics_map && python build.py
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          echo "--- geopolitics_map/build.py ---" >> out/build.log
+          (cd geopolitics_map && python build.py) 2>&1 | tee -a out/build.log
 
       - name: Build corporate activity map
+        continue-on-error: true
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: cd corp_activity_map && python build.py
+        run: |
+          set -o pipefail
+          echo "--- corp_activity_map/build.py ---" >> out/build.log
+          (cd corp_activity_map && python build.py) 2>&1 | tee -a out/build.log
+
+      - name: Ensure corp web/data.json (rebuild from cached events if the build failed)
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          echo "--- corp_activity_map/build.py --json ---" >> out/build.log
+          (cd corp_activity_map && python build.py --json) 2>&1 | tee -a out/build.log
 
       # ── 組み立て：各工程のログを out/build.log に残し、Pages と一緒に公開する（サインイン不要で読める）
       - name: Copy web/ -> out/
@@ -59,7 +81,7 @@ jobs:
           mkdir -p out/geo out/corp
           cp -r geopolitics_map/web/.   out/geo/
           cp -r corp_activity_map/web/. out/corp/
-          echo "== build $(date -u +%FT%TZ) run=${{ github.run_id }} ==" > out/build.log
+          echo "--- web/ contents ---" >> out/build.log
           ls -la geopolitics_map/web corp_activity_map/web >> out/build.log 2>&1
 
       - name: Export summaries
