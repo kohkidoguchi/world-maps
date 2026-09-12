@@ -28,7 +28,7 @@ def geo_summary(d: dict) -> dict:
     events = gd.get("events", []) if isinstance(gd.get("events"), list) else []
     seen, top = set(), []
     for e in sorted(events, key=lambda x: -(x.get("score") or 0)):
-        title = (e.get("real_title") or e.get("title") or "").strip()
+        title = str(e.get("title") or "").strip()
         key = title.lower()[:80]
         if not title or key in seen:
             continue
@@ -76,7 +76,10 @@ def corp_summary(d: dict) -> dict:
     labels = d.get("action_labels", {})
     evs = day.get("events") or []
     top = []
-    for e in sorted(evs, key=lambda x: -(x.get("weight") or 0))[:12]:
+    def wtotal(x):
+        w = x.get("weight")
+        return (w.get("total") if isinstance(w, dict) else w) or 0
+    for e in sorted(evs, key=lambda x: -wtotal(x))[:12]:
         actor = e.get("actor") or {}; loc = e.get("location") or {}; imp = e.get("impact") or {}
         top.append({
             "title": e.get("title_ja"), "summary": e.get("summary_ja"),
@@ -87,7 +90,7 @@ def corp_summary(d: dict) -> dict:
             "amount": e.get("amount_text"), "amount_usd": e.get("amount_usd"),
             "impact": imp.get("score"), "horizon": imp.get("horizon"), "scope": imp.get("scope"),
             "rationale": imp.get("rationale_ja"), "cross_border": e.get("cross_border"),
-            "weight": round(e.get("weight") or 0, 2),
+            "weight": round(wtotal(e), 2),
         })
     by_action, by_theme = {}, {}
     for e in evs:
