@@ -1,0 +1,5 @@
+requests>=2.31
+feedparser>=6.0
+anthropic>=1.0
+python-dotenv>=1.0
+truststore>=0.8   # trust the Windows certificate store (corporate SSL proxy)

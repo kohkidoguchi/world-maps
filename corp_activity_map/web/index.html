@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>世界企業活動マップ</title>
+<link rel="stylesheet" href="style.css">
+<script src="lib/d3.min.js"></script>
+<script src="lib/topojson.min.js"></script>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <h1>世界企業活動マップ</h1>
+    <p class="sub">毎日、世界中の企業活動（買収・投資・撤退・規制…）を <b>主体の大きさ × 動く資本量 × 将来影響</b> で重みづけして地図に置く</p>
+  </div>
+  <div class="dates" id="dates"></div>
+</header>
+
+<section class="filters" id="filters">
+  <div class="chips" id="type-chips"></div>
+  <label>テーマ <select id="theme-sel"><option value="">すべて</option></select></label>
+  <button class="toggle" id="no-ai" type="button" aria-pressed="false" title="重要度上位がAI案件で埋まるときに、AI・半導体テーマを外して他の動きを見る">AI・半導体を除く</button>
+  <label>地域 <select id="region-sel"><option value="">世界</option></select></label>
+  <label>重み ≥ <input type="range" id="w-min" min="1" max="4.5" step="0.1" value="1"><span id="w-min-v">1.0</span></label>
+  <label class="chk"><input type="checkbox" id="arcs" checked> 国境を越える資本の矢印</label>
+  <label class="chk"><input type="checkbox" id="cumul"> 直近7日を重ねる</label>
+  <input type="search" id="q" placeholder="企業名・キーワード">
+</section>
+
+<main class="grid">
+  <div class="map-wrap">
+    <svg id="map"></svg>
+    <button class="zoom-reset" id="zoom-reset" title="ホイールで拡大、ドラッグで移動。クリックで世界全体に戻す">世界全体に戻す</button>
+    <div class="legend" id="legend"></div>
+    <p class="caption" id="caption"></p>
+  </div>
+  <aside class="side">
+    <div class="note" id="note"></div>
+    <div class="rank-head"><h2>今日の重要イベント</h2><span id="count"></span></div>
+    <ol class="rank" id="rank"></ol>
+  </aside>
+</main>
+
+<section class="detail" id="detail" hidden></section>
+
+<section class="agg">
+  <div class="agg-block">
+    <h2>どこで起きているか <small>活動の場所（国別）</small></h2>
+    <div id="agg-loc"></div>
+  </div>
+  <div class="agg-block">
+    <h2>どこから資本が出ているか <small>主体の本社所在国</small></h2>
+    <div id="agg-origin"></div>
+  </div>
+  <div class="agg-block">
+    <h2>何に向かっているか <small>テーマ別</small></h2>
+    <div id="agg-theme"></div>
+  </div>
+</section>
+
+<footer>
+  <p id="method"></p>
+  <p>出所：Google News（英・日・独・中・仏・西・葡・韓・アラビア語の検索フィード、直近24時間）、FT Companies。抽出・分類・緯度経度・金額の概算は Claude による自動処理で、誤りを含みうる。各イベントの出典リンクから原記事を確認できる。</p>
+</footer>
+
+<div class="tip" id="tip" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>

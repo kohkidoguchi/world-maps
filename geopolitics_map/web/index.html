@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>世界政治・地政学マップ</title>
+<link rel="stylesheet" href="style.css">
+<script src="lib/d3.min.js"></script>
+<script src="lib/topojson.min.js"></script>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <h1>世界政治・地政学マップ</h1>
+    <p class="sub">誰が・誰に・何をしたか（GDELT）× 市場が織り込む確率（予測市場）× 制裁 × 同盟・軍事力・統治の質 ── 速いが部分的な<b>事象時計</b>と、遅いが根本的な<b>構造時計</b>を重ねる</p>
+  </div>
+  <div class="clocks">
+    <div class="clock" id="clock-events"><h3>事象時計 <span>15分〜日次</span></h3><ul></ul></div>
+    <div class="clock" id="clock-structure"><h3>構造時計 <span>年次・手動保守</span></h3><ul></ul></div>
+  </div>
+</header>
+
+<main>
+<!-- ============================== 1. world ============================== -->
+<section class="panel" id="world">
+  <div class="panel-head">
+    <h2>世界地図 ── 直近24時間の政治・地政学事象と、その下にある構造</h2>
+    <div class="controls">
+      <label>塗り分け <select id="map-metric"></select></label>
+      <label class="chk"><input type="checkbox" id="map-bubbles" checked> 円＝</label><select id="map-bubble-metric"><option value="news" selected>ニュース重要度（上位記事の重みの合計 × 新規性）</option><option value="score_adj">全事象スコア × 新規性</option><option value="articles">記事数</option><option value="mat">実質的対立（暴力・強制）のスコア</option></select>
+      <label class="chk"><input type="checkbox" id="map-dots"> 点＝個別事象の発生地</label>
+      <label>矢印 <select id="map-arrows"><option value="both">対立と協調（上位）</option><option value="conf">対立のみ</option><option value="coop">協調のみ</option><option value="">なし</option></select></label>
+      <label>ブロック <select id="map-bloc"><option value="">なし</option></select></label>
+    </div>
+  </div>
+  <div class="world-grid">
+    <div class="map-wrap">
+      <svg id="map"></svg>
+      <div id="news-pop" class="news-pop" hidden></div>
+      <div id="map-legend" class="legend"></div>
+      <p class="caption" id="map-caption"></p>
+    </div>
+    <aside class="country-card" id="country-card">
+      <p class="hint">円をクリックすると、その国の直近24時間の主要ニュース（見出し・媒体・リンク）が地図上に開きます。国の面をクリックすると右のカードに事象・相手国・予測市場・制裁・構造指標を表示します。円の大きさ＝ニュース重要度（記事ごとの重み＝媒体数 × 強度 × 主体の規模 × 国際性、を上位記事で合計し、28日中央値比の新規性で補正）、色＝対立の比率。矢印＝主体→対象（赤＝対立、青＝協調）。</p>
+    </aside>
+  </div>
+</section>
+
+<!-- ============================== 2. events ============================== -->
+<section class="panel" id="events">
+  <div class="panel-head">
+    <h2>直近24時間の重要事象 ── 重みづけの内訳つき</h2>
+    <div class="controls">
+      <label>種類 <select id="ev-kind"><option value="all">すべて</option><option value="conf">対立（言語・実質）</option><option value="mat">実質的対立のみ（暴力・強制・威嚇の実行）</option><option value="coop">協調</option></select></label>
+      <label class="chk"><input type="checkbox" id="ev-intl" checked> 国際（異なる国の主体間）のみ</label>
+      <label class="chk"><input type="checkbox" id="ev-selected"> 選択国のみ</label>
+      <label>件数 <select id="ev-n"><option>30</option><option>60</option><option>120</option></select></label>
+    </div>
+  </div>
+  <p class="caption">スコア＝媒体数（報じた情報源の数：転載に頑健な注目度）× 強度（1＋|Goldstein|/5：協調・対立とも極端なほど大）× 主体の規模（1＋0.5×関与国の勢力指数の和）× 国際性（異なる国の主体間なら1.5）。対象は「国際的な主体間の事象」または「政府・軍・反政府勢力・議会・司法・警察・国際機関が関与する事象」のみ（国内の事件・天候・スポーツ等は除外）。同じ事象を報じる記事群を「場所×行為×主体×対象」で束ねている。見出しは代表記事のページから取得（取得できない場合はURLから推定と注記）。時刻はUTC。</p>
+  <div id="events-list" class="ev-list"></div>
+</section>
+
+<!-- ============================== 3. dyads ============================== -->
+<section class="panel" id="dyads">
+  <div class="panel-head">
+    <h2>主要国の相互作用マトリクス ── 誰が誰に対して動いているか</h2>
+    <div class="controls">
+      <label>期間 <select id="mx-window"><option value="24h">直近24時間</option><option value="7d">7日</option><option value="28d">28日</option></select></label>
+      <label>表示 <select id="mx-mode"><option value="net">純協調（協調−対立）</option><option value="conf">対立スコア</option><option value="coop">協調スコア</option></select></label>
+    </div>
+  </div>
+  <p class="caption">行＝主体（行為する側）、列＝対象。セル＝事象スコアの合計。青＝協調が優勢、赤＝対立が優勢。対角線の右上と左下が非対称なら「一方的」な関係（例：非難する側とされる側）。</p>
+  <div class="mx-wrap"><table id="mx" class="mx"></table></div>
+</section>
+
+<!-- ============================== 4. markets ============================== -->
+<section class="panel" id="markets">
+  <div class="panel-head">
+    <h2>予測市場 ── 市場が織り込む地政学・選挙の確率（Polymarket）</h2>
+    <div class="controls">
+      <label>種類 <select id="mk-kind"><option value="all">すべて</option><option value="geo">地政学</option><option value="election">選挙</option></select></label>
+      <label class="chk"><input type="checkbox" id="mk-selected"> 選択国のみ</label>
+    </div>
+  </div>
+  <p class="caption">YES価格＝市場の主観確率。Δ1日・Δ7日は確率の変化（ポイント）。取引量の薄い市場は粗い。複数選択肢の市場（誰が首相になるか等）は上位候補を表示。</p>
+  <div class="mx-wrap"><table id="mk-table" class="list"><thead><tr><th>国</th><th>市場</th><th>確率</th><th>Δ1日</th><th>Δ7日</th><th>24h出来高</th><th>期限</th></tr></thead><tbody></tbody></table></div>
+</section>
+
+<!-- ============================== 5. sanctions ============================== -->
+<section class="panel" id="sanctions">
+  <div class="panel-head"><h2>経済制裁 ── 強制的な経済外交の残高と新規指定</h2></div>
+  <div class="sanc-grid">
+    <div>
+      <div class="tier-head"><h3>OFAC SDN（米国）プログラム別の指定件数</h3><span class="period-badge" id="ofac-badge"></span></div>
+      <div id="ofac-bars"></div>
+    </div>
+    <div>
+      <div class="tier-head"><h3>米国の最近の制裁アクション</h3></div>
+      <div id="ofac-actions" class="feed"></div>
+      <div id="ofac-diff" class="feed"></div>
+    </div>
+    <div>
+      <div class="tier-head"><h3>EU 制裁リスト ── 直近の追加</h3><span class="period-badge" id="eu-badge"></span></div>
+      <div id="eu-recent" class="feed"></div>
+    </div>
+    <div>
+      <div class="tier-head"><h3>国連安保理 制裁リスト ── 直近の追加</h3><span class="period-badge" id="un-badge"></span></div>
+      <div id="un-recent" class="feed"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== 6. timeline ============================== -->
+<section class="panel" id="timeline">
+  <div class="panel-head"><h2>時系列 ── 世界の対立・協調の総量と、選択国の注目度</h2></div>
+  <p class="caption">1日あたりの記事数（GDELT、96スロット換算）。対立＝言語的対立＋実質的対立、協調＝言語的協調＋実質的協調。過去分は1時間ごとのサンプルを4倍しているため、直近2日（全スロット取込）と比べて粗い。</p>
+  <div class="ts-grid">
+    <div><div class="tier-head"><h3>世界全体</h3></div><svg id="ts-global"></svg><div class="legend-inline" id="ts-global-legend"></div></div>
+    <div><div class="tier-head"><h3 id="ts-country-title">選択国</h3></div><svg id="ts-country"></svg><div class="legend-inline" id="ts-country-legend"></div></div>
+  </div>
+</section>
+
+<!-- ============================== 7. calendar + UN ============================== -->
+<section class="panel" id="calendar">
+  <div class="cal-grid">
+    <div>
+      <div class="tier-head"><h3>選挙カレンダー ── 今後120日と直近14日</h3></div>
+      <p class="caption">Wikipedia の国政選挙カレンダーから。斜体＝日程未確定。</p>
+      <div id="elections" class="feed"></div>
+    </div>
+    <div>
+      <div class="tier-head"><h3>国連 ── 安保理・総会の会合報道</h3></div>
+      <div id="un-press" class="feed"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== 8. provenance ============================== -->
+<section class="panel" id="provenance">
+  <div class="panel-head"><h2>データの出所と鮮度</h2></div>
+  <p class="caption">15分ごとのイベントデータと年次の構造統計が同じ鮮度に見えないようにするための台帳。各数値の観測期間・取得日時・件数・注意点。</p>
+  <table id="sources-table"><thead><tr><th>ソース</th><th>内容</th><th>最新観測</th><th>取得日時</th><th>件数</th><th>備考</th></tr></thead><tbody></tbody></table>
+  <div class="tier">
+    <div class="tier-head"><h3>同盟・ブロック表（手動保守）</h3></div>
+    <div id="blocs-table" class="feed"></div>
+  </div>
+  <p class="caption" id="generated"></p>
+</section>
+</main>
+
+<div id="tooltip" class="tooltip" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>

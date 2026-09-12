@@ -1,0 +1,9 @@
+# generated / cached — rebuilt by the workflow
+*/data/
+*/dist/
+*/web/data.json
+*/.claude/
+out/
+__pycache__/
+*.pyc
+.env

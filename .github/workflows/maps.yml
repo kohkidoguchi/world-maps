@@ -1,0 +1,79 @@
+name: World Maps
+
+on:
+  schedule:
+    - cron: '0 18 * * 0'   # Mon 03:00 JST — ahead of the Monday digest (06:00 JST)
+    - cron: '0 18 * * 3'   # Thu 03:00 JST — ahead of the Thursday digest
+  workflow_dispatch:
+  push:
+    branches: [main]       # only builds when the commit message contains [build]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.event_name != 'push' || contains(github.event.head_commit.message, '[build]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Restore data caches (GDELT zips, corp headlines/events)
+        uses: actions/cache@v4
+        with:
+          path: |
+            geopolitics_map/data
+            corp_activity_map/data
+          key: maps-data-${{ github.run_id }}
+          restore-keys: |
+            maps-data-
+
+      - name: Build geopolitics map
+        run: cd geopolitics_map && python build.py
+
+      - name: Build corporate activity map
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: cd corp_activity_map && python build.py
+
+      - name: Assemble site (web/ -> out/, summaries, screenshots, index)
+        run: |
+          mkdir -p out/geo out/corp
+          cp -r geopolitics_map/web/.   out/geo/
+          cp -r corp_activity_map/web/. out/corp/
+          python tools/export_summary.py
+          python tools/render.py
+          python tools/make_index.py
+          du -sh out; ls -la out out/geo out/corp
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
