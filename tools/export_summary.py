@@ -26,8 +26,14 @@ def geo_summary(d: dict) -> dict:
     ja = lambda iso: (names.get(iso) or {}).get("ja") or iso
     gd = d.get("gdelt", {})
     events = gd.get("events", []) if isinstance(gd.get("events"), list) else []
+    # 国際的な出来事（国をまたぐ dyad）を優先し、国内ニュース（GDELTは米国ローカル報道が多い）は
+    # 上位の少数だけ添える — メールの目的は「地政学」なので。
+    def ranked(evs):
+        return sorted(evs, key=lambda x: -(x.get("score") or 0))
+    intl = ranked([e for e in events if e.get("intl")])
+    dom  = ranked([e for e in events if not e.get("intl")])
     seen, top = set(), []
-    for e in sorted(events, key=lambda x: -(x.get("score") or 0)):
+    for e in intl[:9] + dom[:3] + intl[9:]:
         title = str(e.get("title") or "").strip()
         key = title.lower()[:80]
         if not title or key in seen:
