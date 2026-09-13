@@ -1,7 +1,17 @@
-# generated / cached — rebuilt by the workflow
-*/data/
+# generated / cached — rebuilt by the workflow (data caches live in Actions cache)
+geopolitics_map/data/
+corp_activity_map/data/
+capital_flows/data/*
+!capital_flows/data/observations.csv.gz
+!capital_flows/data/sources.json
+research_map/data/*
+!research_map/data/map/
+research_map/data/map/*
+!research_map/data/map/papers.json
+!research_map/data/entities/
 */dist/
 */web/data.json
+*/web/matrix_data.json
 */.claude/
 out/
 __pycache__/

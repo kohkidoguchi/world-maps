@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>グローバル資本フローマップ</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="matrix.css">
+<script src="lib/d3.min.js"></script>
+</head>
+<body data-measure="TX">
+<header class="bar">
+  <div class="title">
+    <h1>グローバル資本フローマップ</h1>
+    <p>誰が資金を余らせ、どこを通り、国境を越え、誰の不足を埋めたか</p>
+  </div>
+  <div class="mode" role="tablist">
+    <button class="mode-btn active" data-measure="TX" role="tab"><span class="k">①</span><span class="t">実取引フロー</span><span class="d">期間中に実際に動いた資金</span></button>
+    <button class="mode-btn" data-measure="POS" role="tab"><span class="k">②</span><span class="t">保有残高</span><span class="d">ある時点で誰が誰の資本を持つか</span></button>
+    <button class="mode-btn" data-measure="DPOS" role="tab"><span class="k">③</span><span class="t">残高変化</span><span class="d">取引＋価格・為替変動</span></button>
+    <button class="mode-btn" data-measure="VAL" role="tab"><span class="k">④</span><span class="t">評価変動</span><span class="d">③−①＝価格・為替による増減</span></button>
+  </div>
+</header>
+
+<section class="grid-sec recent-sec" id="recent">
+  <div class="tier-head">
+    <h2>統計の後で何が動いたか ── 直近の価格指数と評価変動の Nowcast</h2>
+    <div class="controls-inline"><label class="wsel">保有主体 <select id="sel-rsector"><option value="HH">家計</option><option value="ALL">全部門</option><option value="NFC">企業</option><option value="GOV">政府</option><option value="FIN">金融（中央銀行含む）</option></select></label><span class="badge est" id="recent-badge"></span></div>
+  </div>
+  <p class="note" id="recent-note"></p>
+  <div class="scroll"><table id="idx-table" class="wt"></table></div>
+  <p class="note" id="idx-note"></p>
+  <div class="scroll"><table id="nowcast-table" class="wt"></table></div>
+  <p class="note" id="nowcast-note"></p>
+</section>
+
+<nav class="ctl">
+  <div class="seg" id="scope">
+    <button class="active" data-scope="GRID">資本フロー図</button>
+    <button data-scope="DOM">国内の部門×部門</button>
+  </div>
+  <label>金融商品 <select id="sel-instr"></select></label>
+  <label>期間 <select id="sel-period"></select></label>
+  <label id="ctl-show">表示 <select id="sel-show">
+    <option value="80">主要フロー（合計の80%）</option><option value="10">上位10</option><option value="25">上位25</option><option value="50">上位50</option><option value="999">すべて</option>
+  </select></label>
+  <label id="ctl-econ" hidden>経済 <select id="sel-econ"></select></label>
+  <label class="chk" id="ctl-dom"><input type="checkbox" id="chk-dom" checked> 国内の矢印</label>
+  <label class="chk" id="ctl-other"><input type="checkbox" id="chk-other" checked> その他海外</label>
+  <span class="badge" id="status-badge"></span>
+</nav>
+
+
+<section class="grid-sec" id="grid-sec">
+  <div class="grid-head">
+    <h2 id="grid-title"></h2>
+    <p class="note" id="grid-note"></p>
+  </div>
+  <div class="scroll"><svg id="grid"></svg></div>
+  <p class="legend" id="grid-legend"></p>
+
+  <div class="story" id="story"></div>
+
+  <div class="wealth" id="wealth" hidden>
+    <div class="tier-head"><h3>資産クラス別の評価変動 ── 株式・債券・投信・不動産・金の価格はどの主体の富を動かしたか</h3>
+      <label class="wsel">保有主体 <select id="sel-wsector"><option value="ALL">全部門</option><option value="HH">家計</option><option value="NFC">企業</option><option value="GOV">政府</option><option value="FIN">金融（中央銀行含む）</option></select></label></div>
+    <p class="note" id="wealth-note"></p>
+    <div class="scroll"><table id="wealth-table" class="wt"></table></div>
+    <p class="note" id="wealth-foot"></p>
+  </div>
+
+  <div class="explain" id="explain">
+    <div class="ex-col"><h3 id="ex-year-h">この期間の背景 ── 解釈</h3><div id="ex-year"></div></div>
+    <div class="ex-col"><h3>データで見る背景（地域別）</h3><div id="ex-data"></div></div>
+  </div>
+</section>
+
+<main id="dom-main" hidden>
+  <section class="chord-col">
+    <h2 id="chord-title"></h2>
+    <svg id="chord"></svg>
+    <p class="note" id="chord-note"></p>
+    <div id="side"></div>
+  </section>
+  <section class="mx-col">
+    <h2 id="mx-title"></h2>
+    <p class="note" id="mx-note"></p>
+    <div class="scroll"><svg id="bubbles"></svg></div>
+    <p class="legend" id="mx-legend"></p>
+  </section>
+</main>
+
+<footer><p id="foot"></p></footer>
+<div id="tip" class="tip" hidden></div>
+<script src="matrix.js"></script>
+</body>
+</html>

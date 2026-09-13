@@ -7,21 +7,23 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "out"
 CARDS = [
-    ("geo",  "世界の政治・地政学マップ", "GDELTイベント × 予測市場 × 制裁 × 構造指標"),
-    ("corp", "世界の企業活動マップ",     "各国ニュースからClaudeが抽出した企業イベント（規模×資本×影響で重み付け）"),
+    ("capital",  "資産クラス別の評価額変動（Nowcast）", "資金循環統計の残高 × 直近の株価・利回り・為替 ＝ 公表を待たずに推計した評価変動", "sheet.png"),
+    ("geo",      "世界の政治・地政学マップ", "GDELTイベント × 予測市場 × 制裁 × 構造指標", "map.png"),
+    ("corp",     "世界の企業活動マップ",     "各国ニュースからClaudeが抽出した企業イベント（規模×資本×影響で重み付け）", "map.png"),
+    ("research", "世界の研究マップ",         "OpenAlex：各分野の上位1%論文と新着（被引用の重要度で重み付け）", "map.png"),
 ]
 
 def main():
     parts = []
-    for key, title, sub in CARDS:
+    for key, title, sub, img_name in CARDS:
         s = {}
         sp = OUT / key / "summary.json"
         if sp.exists():
             s = json.loads(sp.read_text(encoding="utf-8"))
         gen = s.get("generated") or s.get("date") or ""
         img = ""
-        if (OUT / key / "map.png").exists():
-            img = (f'<a href="{key}/"><img src="{key}/map.png" alt="{title}" '
+        if (OUT / key / img_name).exists():
+            img = (f'<a href="{key}/"><img src="{key}/{img_name}" alt="{title}" '
                    f'style="width:100%;border-radius:8px;border:1px solid #ddd"></a>')
         parts.append(
             f'<section style="margin:0 0 40px">'

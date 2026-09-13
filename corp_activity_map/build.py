@@ -304,7 +304,7 @@ def extract_events(headlines: list[dict], recent_titles: list[str], run_date: st
         max_tokens=64000,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user}],
-        output_config={"effort": "high", "format": {"type": "json_schema", "schema": EVENT_SCHEMA}},
+        output_config={"effort": "medium", "format": {"type": "json_schema", "schema": EVENT_SCHEMA}},
     )
     t0 = time.time()
     try:  # 安全分類器による拒否時にサーバー側で別モデルへ切り替える（対応SDK・APIの場合のみ）
@@ -324,6 +324,8 @@ def extract_events(headlines: list[dict], recent_titles: list[str], run_date: st
     text = next(b.text for b in msg.content if b.type == "text")
     u = msg.usage
     print(f"  Claude: {time.time()-t0:.0f}s  in={u.input_tokens} out={u.output_tokens} stop={msg.stop_reason}")
+    if msg.stop_reason == "max_tokens":
+        raise RuntimeError(f"出力が max_tokens で途中終了（out={u.output_tokens}）。JSONが不完全なので中断。見出し数か effort を下げてください。")
     return json.loads(text)
 
 
@@ -462,7 +464,7 @@ def enrich_day(run_date: str) -> None:
 
 {lines}"""
     kwargs = dict(model=MODEL, max_tokens=64000, system=SYSTEM_PROMPT, messages=[{"role": "user", "content": user}],
-                  output_config={"effort": "high", "format": {"type": "json_schema", "schema": ENRICH_SCHEMA}})
+                  output_config={"effort": "medium", "format": {"type": "json_schema", "schema": ENRICH_SCHEMA}})
     t0 = time.time()
     with client.messages.stream(**kwargs) as stream:
         msg = stream.get_final_message()

@@ -1,0 +1,731 @@
+{
+ "generated_at": "2026-09-12T23:46:36",
+ "sources": {
+  "IMF_WEO": {
+   "name": "IMF World Economic Outlook",
+   "url": "https://api.imf.org/external/sdmx/3.0/data/dataflow/IMF.RES/WEO/+/ARG+AUS+BRA+CAN+CHN+FRA+DEU+IND+IDN+ITA+JPN+KOR+MEX+RUS+SAU+ZAF+TUR+GBR+USA+ESP+NLD+CHE+SGP+HKG+IRL+G163.NGDPD+NGDP+NGDP_RPCH+BCA+BCA_NGDPD+NGSD_NGDP+NID_NGDP+GGXWDG_NGDP+GGXWDN_NGDP+GGXCNL_NGDP+GGXONLB_NGDP+GGR_NGDP+GGX_NGDP+PCPIPCH.A?c[TIME_PERIOD]=ge:2000&format=sdmx-json",
+   "rows": 16726,
+   "fetched_at": "2026-09-12T09:53:36",
+   "vintage": "2025-09-30",
+   "license": "IMF terms of use (free re-use with attribution)",
+   "latest": "2031-12-31",
+   "areas": [
+    "ARG",
+    "AUS",
+    "BRA",
+    "CAN",
+    "CHE",
+    "CHN",
+    "DEU",
+    "EA",
+    "ESP",
+    "FRA",
+    "GBR",
+    "HKG",
+    "IDN",
+    "IND",
+    "IRL",
+    "ITA",
+    "JPN",
+    "KOR",
+    "MEX",
+    "NLD",
+    "RUS",
+    "SAU",
+    "SGP",
+    "TUR",
+    "USA",
+    "ZAF"
+   ]
+  },
+  "IMF_BOP": {
+   "name": "IMF Balance of Payments (BPM6)",
+   "url": "https://api.imf.org/external/sdmx/3.0/data/dataflow/IMF.STA/BOP/+/ARG+AUS+BRA+CAN+CHN+FRA+DEU+IND+IDN+ITA+JPN+KOR+MEX+RUS+SAU+ZAF+TUR+GBR+USA+ESP+NLD+CHE+SGP+HKG+IRL+G163.A_NFA_T+L_NIL_T+NNAFANIL_T+NETCD_T+A_T.CAB+KAB+FAB+EO+D_F+P_F+P_F3+P_F5+O_F+R_F+F_F7.USD.Q?c[TIME_PERIOD]=ge:2005&format=sdmx-json",
+   "rows": 84788,
+   "fetched_at": "2026-09-12T10:07:05",
+   "areas": [
+    "ARG",
+    "AUS",
+    "BRA",
+    "CAN",
+    "CHE",
+    "CHN",
+    "DEU",
+    "EA",
+    "ESP",
+    "FRA",
+    "GBR",
+    "HKG",
+    "IDN",
+    "IND",
+    "IRL",
+    "ITA",
+    "JPN",
+    "KOR",
+    "MEX",
+    "NLD",
+    "RUS",
+    "SAU",
+    "SGP",
+    "TUR",
+    "USA",
+    "ZAF"
+   ],
+   "license": "IMF terms of use",
+   "latest": "2026-06-30"
+  },
+  "IMF_IIP": {
+   "name": "IMF International Investment Position",
+   "url": "https://api.imf.org/external/sdmx/3.0/data/dataflow/IMF.STA/IIP/+/ARG+AUS+BRA+CAN+CHN+FRA+DEU+IND+IDN+ITA+JPN+KOR+MEX+RUS+SAU+ZAF+TUR+GBR+USA+ESP+NLD+CHE+SGP+HKG+IRL+G163.NETAL_P+A_P+L_P.NIIP+IIP+D+P_MV+O+R.USD.Q?c[TIME_PERIOD]=ge:2005&format=sdmx-json",
+   "rows": 22910,
+   "fetched_at": "2026-09-12T10:07:09",
+   "license": "IMF terms of use",
+   "latest": "2026-06-30",
+   "areas": [
+    "ARG",
+    "AUS",
+    "BRA",
+    "CAN",
+    "CHE",
+    "CHN",
+    "DEU",
+    "EA",
+    "ESP",
+    "FRA",
+    "GBR",
+    "HKG",
+    "IDN",
+    "IND",
+    "IRL",
+    "ITA",
+    "JPN",
+    "KOR",
+    "MEX",
+    "NLD",
+    "RUS",
+    "SAU",
+    "SGP",
+    "TUR",
+    "USA",
+    "ZAF"
+   ]
+  },
+  "IMF_PIP": {
+   "name": "IMF Portfolio Investment Positions by counterpart (CPIS), by holder/issuer sector",
+   "url": "https://api.imf.org/external/sdmx/3.0/data/dataflow/IMF.STA/PIP/+/ARG+AUS+BRA+CAN+CHN.A.P_TOTINV_P_USD+P_F3_P_USD+P_F51_P_USD.S1+S121+S122+S12R+S12P+S13+S1V.S1+S12+S13+S1V.ARG+AUS+BRA+CAN+CHN+FRA+DEU+IND+IDN+ITA+JPN+KOR+MEX+RUS+SAU+ZAF+TUR+GBR+USA+ESP+NLD+CHE+SGP+HKG+IRL.S?c[TIME_PERIOD]=ge:2015&format=sdmx-json ; https://api.imf.org/external/sdmx/3.0/data/dataflow/IMF.STA/PIP/+/FRA+DEU+IND+IDN+ITA.A.P_TOTINV_P_USD+P_F3_P_USD+P_F51_P_USD.S1+S121+S122+S12R+S12P+S13+S1V.S1+S12+S13+S1V.ARG+AUS+BRA+CAN+CHN+FRA+DEU+IND+IDN+ITA+JPN+KOR+MEX+RUS+SAU+ZAF+TUR+GBR+USA+ESP+NLD+CHE+SGP+HKG+IRL.S?c[TIME_PERIOD]=ge:2015&format=sdmx-json ; https://api.imf.org/external/sdmx/3.0/data/dataflow/IMF.STA/PIP/+/JPN+KOR+MEX+RUS+SAU.A.P_TOTINV_P_USD+P_F3_P_USD+P_F51_P_USD.S1+S121+S122+S12R+S12P+S13+S1V.S1+S12+S13+S1V.ARG+AUS+BRA+CAN+CHN+FRA+DEU+IND+IDN+ITA+JPN+KOR+MEX+RUS+SAU+ZAF+TUR+GBR+USA+ESP+NLD+CHE+SGP+HKG+IRL.S?c[TIME_PERIOD]=ge:2015&format=sdmx-json ; https://api.imf.org/external/sdmx/3.0/data/dataflow/IMF.STA/PIP/+/ZAF+TUR+GBR+USA+ESP.A.P_TOTINV_P_USD+P_F3_P_USD+P_F51_P_USD.S1+S121+S122+S12R+S12P+S13+S1V.S1+S12+S13+S1V.ARG+AUS+BRA+CAN+CHN+FRA+DEU+IND+IDN+ITA+JPN+KOR+MEX+RUS+SAU+ZAF+TUR+GBR+USA+ESP+NLD+CHE+SGP+HKG+IRL.S?c[TIME_PERIOD]=ge:2015&format=sdmx-json ; https://api.imf.org/external/sdmx/3.0/data/dataflow/IMF.STA/PIP/+/NLD+CHE+SGP+HKG+IRL.A.P_TOTINV_P_USD+P_F3_P_USD+P_F51_P_USD.S1+S121+S122+S12R+S12P+S13+S1V.S1+S12+S13+S1V.ARG+AUS+BRA+CAN+CHN+FRA+DEU+IND+IDN+ITA+JPN+KOR+MEX+RUS+SAU+ZAF+TUR+GBR+USA+ESP+NLD+CHE+SGP+HKG+IRL.S?c[TIME_PERIOD]=ge:2015&format=sdmx-json",
+   "rows": 371072,
+   "fetched_at": "2026-09-12T20:09:15",
+   "license": "IMF terms of use",
+   "latest": "2025-06-30",
+   "areas": [
+    "ARG",
+    "AUS",
+    "BRA",
+    "CAN",
+    "CHE",
+    "CHN",
+    "DEU",
+    "ESP",
+    "FRA",
+    "GBR",
+    "HKG",
+    "IDN",
+    "IND",
+    "IRL",
+    "ITA",
+    "JPN",
+    "KOR",
+    "MEX",
+    "NLD",
+    "RUS",
+    "SAU",
+    "SGP",
+    "TUR",
+    "USA",
+    "ZAF"
+   ]
+  },
+  "IMF_DIP": {
+   "name": "IMF Direct Investment Positions by counterpart (CDIS)",
+   "url": "https://api.imf.org/external/sdmx/3.0/data/dataflow/IMF.STA/DIP/+/ARG+AUS+BRA+CAN+CHN.O.OTWD_D_NETAL_FALL_ALL+INWD_D_NETLA_FALL_ALL.ARG+AUS+BRA+CAN+CHN+FRA+DEU+IND+IDN+ITA+JPN+KOR+MEX+RUS+SAU+ZAF+TUR+GBR+USA+ESP+NLD+CHE+SGP+HKG+IRL.A?c[TIME_PERIOD]=ge:2013&format=sdmx-json ; https://api.imf.org/external/sdmx/3.0/data/dataflow/IMF.STA/DIP/+/FRA+DEU+IND+IDN+ITA.O.OTWD_D_NETAL_FALL_ALL+INWD_D_NETLA_FALL_ALL.ARG+AUS+BRA+CAN+CHN+FRA+DEU+IND+IDN+ITA+JPN+KOR+MEX+RUS+SAU+ZAF+TUR+GBR+USA+ESP+NLD+CHE+SGP+HKG+IRL.A?c[TIME_PERIOD]=ge:2013&format=sdmx-json ; https://api.imf.org/external/sdmx/3.0/data/dataflow/IMF.STA/DIP/+/JPN+KOR+MEX+RUS+SAU.O.OTWD_D_NETAL_FALL_ALL+INWD_D_NETLA_FALL_ALL.ARG+AUS+BRA+CAN+CHN+FRA+DEU+IND+IDN+ITA+JPN+KOR+MEX+RUS+SAU+ZAF+TUR+GBR+USA+ESP+NLD+CHE+SGP+HKG+IRL.A?c[TIME_PERIOD]=ge:2013&format=sdmx-json ; https://api.imf.org/external/sdmx/3.0/data/dataflow/IMF.STA/DIP/+/ZAF+TUR+GBR+USA+ESP.O.OTWD_D_NETAL_FALL_ALL+INWD_D_NETLA_FALL_ALL.ARG+AUS+BRA+CAN+CHN+FRA+DEU+IND+IDN+ITA+JPN+KOR+MEX+RUS+SAU+ZAF+TUR+GBR+USA+ESP+NLD+CHE+SGP+HKG+IRL.A?c[TIME_PERIOD]=ge:2013&format=sdmx-json ; https://api.imf.org/external/sdmx/3.0/data/dataflow/IMF.STA/DIP/+/NLD+CHE+SGP+HKG+IRL.O.OTWD_D_NETAL_FALL_ALL+INWD_D_NETLA_FALL_ALL.ARG+AUS+BRA+CAN+CHN+FRA+DEU+IND+IDN+ITA+JPN+KOR+MEX+RUS+SAU+ZAF+TUR+GBR+USA+ESP+NLD+CHE+SGP+HKG+IRL.A?c[TIME_PERIOD]=ge:2013&format=sdmx-json",
+   "rows": 15469,
+   "fetched_at": "2026-09-12T16:09:36",
+   "license": "IMF terms of use",
+   "latest": "2024-12-31",
+   "areas": [
+    "ARG",
+    "AUS",
+    "BRA",
+    "CAN",
+    "CHE",
+    "CHN",
+    "DEU",
+    "ESP",
+    "FRA",
+    "GBR",
+    "HKG",
+    "IDN",
+    "IND",
+    "IRL",
+    "ITA",
+    "JPN",
+    "KOR",
+    "MEX",
+    "NLD",
+    "RUS",
+    "SAU",
+    "SGP",
+    "TUR",
+    "USA",
+    "ZAF"
+   ]
+  },
+  "OECD_QSA": {
+   "name": "OECD Quarterly Sector Accounts (non-financial)",
+   "url": "https://sdmx.oecd.org/public/rest/data/OECD.SDD.NAD,DSD_NASEC1@DF_QSA,1.1/Q.N.JPN+EA+GBR+DEU+FRA+ITA+CAN+AUS+ESP+NLD+MEX+KOR.S1M+S11+S12+S13+S1+S2.S1..B9+B8G+B6G+B5G+P3+P31+P51G+P5+D1+D4+D41+D42+D5+D61+D62+D2+D9+B2A3G+OTR+OTE+B1GQ+B101._Z..XDC..V.N.?format=csvfilewithlabels&dimensionAtObservation=AllDimensions&startPeriod=1995-Q1",
+   "rows": 196280,
+   "fetched_at": "2026-09-12T13:30:18",
+   "license": "OECD terms (CC BY 4.0)",
+   "latest": "2026-06-30",
+   "areas": [
+    "AUS",
+    "CAN",
+    "DEU",
+    "EA",
+    "ESP",
+    "FRA",
+    "GBR",
+    "ITA",
+    "JPN",
+    "KOR",
+    "MEX",
+    "NLD"
+   ]
+  },
+  "OECD_FA_FLOW": {
+   "name": "OECD Financial accounts (flows)",
+   "url": "https://sdmx.oecd.org/public/rest/data/OECD.SDD.NAD,DSD_NASEC20@DF_T620R_Q,1.1/Q.N.JPN+USA+GBR+DEU+FRA+ITA+CAN+AUS+ESP+NLD+MEX+KOR..S1M+S11+S12+S13+S2+S1.S1.N.A+L+N.F.F+F2+F3+F4+F5+F51+F52+F6+F7+F8+B9F+BF90..XDC+USD...V.N..?format=csvfilewithlabels&dimensionAtObservation=AllDimensions&startPeriod=1995-Q1",
+   "rows": 276110,
+   "fetched_at": "2026-09-12T13:31:16",
+   "license": "OECD terms (CC BY 4.0)",
+   "latest": "2026-03-31",
+   "areas": [
+    "CAN",
+    "DEU",
+    "ESP",
+    "FRA",
+    "GBR",
+    "ITA",
+    "JPN",
+    "KOR",
+    "MEX",
+    "NLD",
+    "USA"
+   ]
+  },
+  "OECD_FA_STOCK": {
+   "name": "OECD Financial accounts (stocks)",
+   "url": "https://sdmx.oecd.org/public/rest/data/OECD.SDD.NAD,DSD_NASEC20@DF_T720R_Q,1.1/Q.N.JPN+USA+GBR+DEU+FRA+ITA+CAN+AUS+ESP+NLD+MEX+KOR..S1M+S11+S12+S13+S2+S1.S1.N.A+L+N.LE.F+F2+F3+F4+F5+F51+F52+F6+F7+F8+B9F+BF90..XDC+USD...V.N..?format=csvfilewithlabels&dimensionAtObservation=AllDimensions&startPeriod=1995-Q1",
+   "rows": 276869,
+   "fetched_at": "2026-09-12T13:32:18",
+   "license": "OECD terms (CC BY 4.0)",
+   "latest": "2026-03-31",
+   "areas": [
+    "CAN",
+    "DEU",
+    "ESP",
+    "FRA",
+    "GBR",
+    "ITA",
+    "JPN",
+    "KOR",
+    "MEX",
+    "NLD",
+    "USA"
+   ]
+  },
+  "OECD_PSD": {
+   "name": "OECD Quarterly Public Sector Debt",
+   "url": "https://sdmx.oecd.org/public/rest/data/OECD.SDD.NAD,DSD_NASEC20@DF_T7PSD_Q,1.1/Q.N.JPN+USA+GBR+DEU+FRA+ITA+CAN+AUS+ESP+NLD+MEX+KOR..S13+S1311.S1.C.L.LE.FD4+F3+F4+F2.T.XDC+USD+PT_B1GQ....N..?format=csvfilewithlabels&dimensionAtObservation=AllDimensions&startPeriod=1995-Q1",
+   "rows": 61631,
+   "fetched_at": "2026-09-12T13:32:38",
+   "license": "OECD terms (CC BY 4.0)",
+   "latest": "2026-03-31",
+   "areas": [
+    "AUS",
+    "CAN",
+    "DEU",
+    "ESP",
+    "FRA",
+    "GBR",
+    "ITA",
+    "JPN",
+    "KOR",
+    "MEX",
+    "NLD",
+    "USA"
+   ]
+  },
+  "OECD_QNA": {
+   "name": "OECD Quarterly National Accounts (nominal GDP)",
+   "url": "https://sdmx.oecd.org/public/rest/data/OECD.SDD.NAD,DSD_NAMAIN1@DF_QNA,1.1/Q.N.JPN+USA+GBR+DEU+FRA+ITA+CAN+AUS+ESP+NLD+MEX+KOR+EA20+CHN+IND+BRA+IDN+TUR+ZAF+ARG+SAU+RUS.S1.S1.B1GQ._Z...XDC.V.N.?format=csvfilewithlabels&dimensionAtObservation=AllDimensions&startPeriod=1995-Q1",
+   "rows": 2425,
+   "fetched_at": "2026-09-12T13:32:45",
+   "license": "OECD terms (CC BY 4.0)",
+   "latest": "2026-06-30",
+   "areas": [
+    "ARG",
+    "AUS",
+    "BRA",
+    "CAN",
+    "CHN",
+    "DEU",
+    "ESP",
+    "FRA",
+    "GBR",
+    "IDN",
+    "IND",
+    "ITA",
+    "JPN",
+    "KOR",
+    "MEX",
+    "NLD",
+    "RUS",
+    "SAU",
+    "TUR",
+    "USA",
+    "ZAF"
+   ]
+  },
+  "ECB_QSA": {
+   "name": "ECB Euro area quarterly sector accounts (non-financial)",
+   "url": "https://data-api.ecb.europa.eu/service/data/QSA/Q.N.I10.W0.S1M+S11+S12+S13+S1.S1.N+_Z+P+C.C+D+B.B9+B8G+B6G+B5G+P3+P31+P51G+P5+D1+D4+D41+D42+D5+D61+D62+D2+D9+B2A3G+OTR+OTE+B101._Z._Z._Z+_T.XDC._T.S.V.N._T?format=csvdata&startPeriod=1999-01",
+   "rows": 13298,
+   "fetched_at": "2026-09-12T11:26:30",
+   "license": "ECB free re-use with attribution",
+   "latest": "2026-03-31",
+   "areas": [
+    "EA"
+   ]
+  },
+  "ECB_QSA_FIN": {
+   "name": "ECB Euro area financial accounts (flows & stocks)",
+   "url": "https://data-api.ecb.europa.eu/service/data/QSA/Q.N.I10.W0.S1M+S11+S12+S13+S2+S1.S1.N.A+L+N.F+LE.F+F2+F3+F4+F5+F51+F52+F6+F7+F8+F2M.T+_Z._Z.XDC._T.S.V.N._T?format=csvdata&startPeriod=1999-01",
+   "rows": 27686,
+   "fetched_at": "2026-09-12T09:54:53",
+   "license": "ECB free re-use with attribution",
+   "latest": "2026-03-31",
+   "areas": [
+    "EA"
+   ]
+  },
+  "ECB_W2W": {
+   "name": "ECB Euro area whom-to-whom financial accounts",
+   "url": "https://data-api.ecb.europa.eu/service/data/QSA/Q.N.I10.W2.S1M+S11+S12+S13+S2.S1M+S11+S12+S13.N.A+L.F+LE.F2+F3+F4+F5+F51+F52+F6.T+_Z._Z.XDC._T.S.V.N._T?format=csvdata&startPeriod=2010-01 ; https://data-api.ecb.europa.eu/service/data/QSA/Q.N.I10.W1.S1M+S11+S12+S13+S2.S1.N.A+L.F+LE.F2+F3+F4+F5+F51+F52+F6.T+_Z._Z.XDC._T.S.V.N._T?format=csvdata&startPeriod=2010-01",
+   "rows": 6435,
+   "fetched_at": "2026-09-12T09:55:00",
+   "license": "ECB free re-use with attribution",
+   "latest": "2026-03-31",
+   "areas": [
+    "EA"
+   ]
+  },
+  "ECB_BPS": {
+   "name": "ECB euro area balance of payments (BP6) and RoW financial account",
+   "url": "https://data-api.ecb.europa.eu/service/data/QSA/Q.N.I10.W1.S1.S1.N.A+L.F+LE.F+F2+F3+F4+F5+F51+F52+F6+F7+F8+F2M.T+_Z._Z.XDC._T.S.V.N._T?format=csvdata&startPeriod=1999-01 ; https://data-api.ecb.europa.eu/service/data/BPS/Q.N.I10.W1.S1.S1.T.B.CA._Z._Z._Z.EUR._T._X.N.ALL?format=csvdata&startPeriod=1999-01 ; https://data-api.ecb.europa.eu/service/data/BPS/Q.N.I10.W1.S1.S1.T.A+L+N.FA.D+P+O+R+_Z.._Z.EUR._T._X.N.ALL?format=csvdata&startPeriod=1999-01",
+   "rows": 2382,
+   "fetched_at": "2026-09-12T10:07:33",
+   "license": "ECB free re-use with attribution",
+   "latest": "2026-06-30",
+   "areas": [
+    "EA"
+   ]
+  },
+  "ECB_GFS": {
+   "name": "ECB euro area government debt (Maastricht)",
+   "url": "https://data-api.ecb.europa.eu/service/data/GFS/Q.N.I10.W0.S13.S1.C.L.LE.GD.T._Z.XDC._T.F.V.N._T?format=csvdata&startPeriod=1999-01",
+   "rows": 105,
+   "fetched_at": "2026-09-12T10:07:42",
+   "license": "ECB free re-use with attribution",
+   "latest": "2026-03-31",
+   "areas": [
+    "EA"
+   ]
+  },
+  "ECB_MNA": {
+   "name": "ECB/Eurostat euro area nominal GDP",
+   "url": "https://data-api.ecb.europa.eu/service/data/MNA/Q.N.I10.W2.S1.S1.B.B1GQ._Z._Z._Z.EUR.V.N?format=csvdata&startPeriod=1999-01",
+   "rows": 110,
+   "fetched_at": "2026-09-12T09:55:07",
+   "license": "ECB free re-use with attribution",
+   "latest": "2026-06-30",
+   "areas": [
+    "EA"
+   ]
+  },
+  "ECB_MKT": {
+   "name": "ECB daily FX / yields / weekly Eurosystem balance sheet",
+   "url": "https://data-api.ecb.europa.eu/service/data/EXR/D.USD.EUR.SP00.A?format=csvdata&startPeriod=2015-01-01 ; https://data-api.ecb.europa.eu/service/data/EXR/D.JPY.EUR.SP00.A?format=csvdata&startPeriod=2015-01-01 ; https://data-api.ecb.europa.eu/service/data/YC/B.U2.EUR.4F.G_N_A.SV_C_YM.SR_10Y?format=csvdata&startPeriod=2015-01-01 ; https://data-api.ecb.europa.eu/service/data/ILM/W.U2.C.T000000.Z5.Z01?format=csvdata&startPeriod=2015-01-01",
+   "rows": 9580,
+   "fetched_at": "2026-09-12T18:46:45",
+   "license": "ECB free re-use with attribution",
+   "latest": "2026-09-11",
+   "areas": [
+    "EA"
+   ]
+  },
+  "FED_Z1": {
+   "name": "Federal Reserve Z.1 Financial Accounts (Integrated Macro Accounts)",
+   "url": "https://www.federalreserve.gov/releases/z1/current/z1_csv_files.zip",
+   "rows": 13356,
+   "fetched_at": "2026-09-12T09:55:26",
+   "missing": [
+    "FL103064103",
+    "FL103192105",
+    "FL104022005"
+   ],
+   "license": "Public domain (US government)",
+   "latest": "2026-06-30",
+   "areas": [
+    "USA"
+   ]
+  },
+  "BIS_TC": {
+   "name": "BIS total credit to the non-financial sector",
+   "url": "https://stats.bis.org/api/v2/data/dataflow/BIS/WS_TC/2.0/Q.AR+AU+BR+CA+CN+FR+DE+IN+ID+IT+JP+KR+MX+RU+SA+ZA+TR+GB+US+ES+NL+CH+SG+HK+IE+XM.C+G+H+N+P.A.M+N.770+USD+XDC.A?format=csv&startPeriod=2000-01-01",
+   "rows": 39582,
+   "fetched_at": "2026-09-12T09:55:29",
+   "license": "BIS terms (free re-use with attribution)",
+   "latest": "2025-12-31",
+   "areas": [
+    "ARG",
+    "AUS",
+    "BRA",
+    "CAN",
+    "CHE",
+    "CHN",
+    "DEU",
+    "EA",
+    "ESP",
+    "FRA",
+    "GBR",
+    "HKG",
+    "IDN",
+    "IND",
+    "IRL",
+    "ITA",
+    "JPN",
+    "KOR",
+    "MEX",
+    "NLD",
+    "RUS",
+    "SAU",
+    "SGP",
+    "TUR",
+    "USA",
+    "ZAF"
+   ]
+  },
+  "BIS_FX": {
+   "name": "BIS daily USD/JPY",
+   "url": "https://stats.bis.org/api/v2/data/dataflow/BIS/WS_XRU/1.0/D.JP.JPY.A?format=csv&startPeriod=2015-01-01",
+   "rows": 2991,
+   "fetched_at": "2026-09-12T18:46:59",
+   "license": "BIS terms",
+   "latest": "2026-09-08",
+   "areas": [
+    "JPN"
+   ]
+  },
+  "UST_DEBT": {
+   "name": "US Treasury Debt to the Penny (daily)",
+   "url": "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v2/accounting/od/debt_to_penny?sort=-record_date&filter=record_date:gte:2010-01-01&page[size]=10000&page[number]=1",
+   "rows": 8384,
+   "fetched_at": "2026-09-12T18:47:02",
+   "license": "Public domain",
+   "latest": "2026-09-10",
+   "areas": [
+    "USA"
+   ]
+  },
+  "UST_DTS": {
+   "name": "US Daily Treasury Statement (TGA balance)",
+   "url": "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/dts/operating_cash_balance?sort=-record_date&filter=record_date:gte:2015-01-01,account_type:in:(Treasury General Account (TGA) Closing Balance,Federal Reserve Account)&page[size]=10000&page[number]=1",
+   "rows": 2801,
+   "fetched_at": "2026-09-12T18:47:05",
+   "license": "Public domain",
+   "latest": "2026-09-10",
+   "areas": [
+    "USA"
+   ]
+  },
+  "UST_MTS": {
+   "name": "US Monthly Treasury Statement (receipts, outlays, deficit)",
+   "url": "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/v1/accounting/mts/mts_table_1?sort=-record_date&filter=record_date:gte:2015-01-01&page[size]=10000&page[number]=1",
+   "rows": 432,
+   "fetched_at": "2026-09-12T09:55:39",
+   "license": "Public domain",
+   "latest": "2026-09-30",
+   "areas": [
+    "USA"
+   ]
+  },
+  "MOF_WEEKLY": {
+   "name": "MOF international transactions in securities (weekly)",
+   "url": "https://www.mof.go.jp/policy/international_policy/reference/itn_transactions_in_securities/week.csv",
+   "rows": 8912,
+   "fetched_at": "2026-09-12T18:47:06",
+   "release": "2026-09-10",
+   "license": "MOF terms (free re-use with attribution)",
+   "latest": "2026-09-05",
+   "areas": [
+    "JPN"
+   ]
+  },
+  "MOF_MONTHLY": {
+   "name": "MOF international transactions in securities (monthly)",
+   "url": "https://www.mof.go.jp/policy/international_policy/reference/itn_transactions_in_securities/montha1.csv",
+   "rows": 2080,
+   "fetched_at": "2026-09-12T09:55:40",
+   "license": "MOF terms",
+   "latest": "2026-08-31",
+   "areas": [
+    "JPN"
+   ]
+  },
+  "BOJ_W2W": {
+   "name": "BoJ flow of funds - debt securities holdings by holder x issuer",
+   "url": "https://www.boj.or.jp/statistics/sj/sjds.xlsx",
+   "rows": 1485,
+   "fetched_at": "2026-09-12T13:33:13",
+   "license": "BoJ terms (free re-use with attribution)",
+   "latest": "2026-03-31",
+   "areas": [
+    "JPN"
+   ]
+  },
+  "OECD_NFA": {
+   "name": "OECD annual balance sheets for non-financial assets (dwellings, land)",
+   "url": "https://sdmx.oecd.org/public/rest/data/OECD.SDD.NAD,DSD_NASEC10@DF_TABLE9B,1.1/A.JPN.S1M+S1..........?format=csvfilewithlabels&dimensionAtObservation=AllDimensions&startPeriod=2010 ; https://sdmx.oecd.org/public/rest/data/OECD.SDD.NAD,DSD_NASEC10@DF_TABLE9B,1.1/A.USA.S1M+S1..........?format=csvfilewithlabels&dimensionAtObservation=AllDimensions&startPeriod=2010",
+   "rows": 1246,
+   "fetched_at": "2026-09-12T23:09:01",
+   "license": "OECD terms (CC BY 4.0)",
+   "latest": "2025-12-31",
+   "areas": [
+    "AUS",
+    "CAN",
+    "DEU",
+    "ESP",
+    "FRA",
+    "GBR",
+    "ITA",
+    "JPN",
+    "KOR",
+    "MEX",
+    "NLD",
+    "USA"
+   ]
+  },
+  "FED_Z1_RE": {
+   "name": "Fed Z.1 B.101/B.103 real estate at market value (level, revaluation, transactions)",
+   "url": "https://www.federalreserve.gov/releases/z1/current/z1_csv_files.zip",
+   "rows": 396,
+   "fetched_at": "2026-09-12T09:55:26",
+   "license": "Public domain",
+   "latest": "2026-06-30",
+   "areas": [
+    "USA"
+   ]
+  },
+  "BIS_SPP": {
+   "name": "BIS residential property prices (nominal index)",
+   "url": "https://stats.bis.org/api/v2/data/dataflow/BIS/WS_SPP/1.0/Q..N.628?format=csv&startPeriod=2010-01-01",
+   "rows": 1559,
+   "fetched_at": "2026-09-12T23:09:28",
+   "license": "BIS terms",
+   "latest": "2026-03-31",
+   "areas": [
+    "AUS",
+    "BRA",
+    "CAN",
+    "CHE",
+    "CHN",
+    "DEU",
+    "EA",
+    "ESP",
+    "FRA",
+    "GBR",
+    "HKG",
+    "IDN",
+    "IND",
+    "IRL",
+    "ITA",
+    "JPN",
+    "KOR",
+    "MEX",
+    "NLD",
+    "RUS",
+    "SGP",
+    "TUR",
+    "USA",
+    "ZAF"
+   ]
+  },
+  "IMF_PCPS": {
+   "name": "IMF primary commodity prices: gold",
+   "url": "https://api.imf.org/external/sdmx/3.0/data/dataflow/IMF.RES/PCPS/+/G001.PGOLD.INDEX+USD.Q?c[TIME_PERIOD]=ge:2010&format=sdmx-json ; https://api.imf.org/external/sdmx/3.0/data/dataflow/IMF.RES/PCPS/+/G001.PGOLD.INDEX+USD.M?c[TIME_PERIOD]=ge:2010&format=sdmx-json",
+   "rows": 1108,
+   "fetched_at": "2026-09-12T23:09:30",
+   "license": "IMF terms of use",
+   "latest": "2026-08-31",
+   "areas": [
+    "WLD"
+   ]
+  },
+  "GOLD_HOLD": {
+   "name": "Central banks monetary gold (F11): stocks and transactions",
+   "url": "https://sdmx.oecd.org/public/rest/data/OECD.SDD.NAD,DSD_NASEC20@DF_T720R_Q,1.1/Q.N.JPN+USA+GBR+DEU+FRA+ITA+CAN+AUS+ESP+NLD+MEX+KOR..S121+S12.S1.N.A.LE.F11+F1..XDC...V.N..?format=csvfilewithlabels&dimensionAtObservation=AllDimensions&startPeriod=2010-Q1 ; https://sdmx.oecd.org/public/rest/data/OECD.SDD.NAD,DSD_NASEC20@DF_T620R_Q,1.1/Q.N.JPN+USA+GBR+DEU+FRA+ITA+CAN+AUS+ESP+NLD+MEX+KOR..S121+S12.S1.N.A.F.F11+F1..XDC...V.N..?format=csvfilewithlabels&dimensionAtObservation=AllDimensions&startPeriod=2010-Q1",
+   "rows": 5592,
+   "fetched_at": "2026-09-12T23:09:35",
+   "license": "OECD / ECB terms",
+   "latest": "2026-03-31",
+   "areas": [
+    "CAN",
+    "DEU",
+    "EA",
+    "ESP",
+    "FRA",
+    "GBR",
+    "ITA",
+    "JPN",
+    "KOR",
+    "MEX",
+    "NLD",
+    "USA"
+   ]
+  },
+  "OECD_MEI": {
+   "name": "OECD Main Economic Indicators: share prices, long-term interest rates (monthly)",
+   "url": "https://sdmx.oecd.org/public/rest/data/OECD.SDD.STES,DSD_STES@DF_FINMARK,/JPN+USA+GBR+DEU+FRA+ITA+ESP+NLD+CAN+KOR+AUS+MEX+EA20+CHN+IND+BRA+IDN+TUR+ZAF+CHE.M.SHARE+IRLT......?format=csvfilewithlabels&dimensionAtObservation=AllDimensions&startPeriod=2015-01",
+   "rows": 5401,
+   "fetched_at": "2026-09-12T23:35:44",
+   "license": "OECD terms (CC BY 4.0)",
+   "latest": "2026-08-31",
+   "areas": [
+    "AUS",
+    "BRA",
+    "CAN",
+    "CHE",
+    "CHN",
+    "DEU",
+    "EA",
+    "ESP",
+    "FRA",
+    "GBR",
+    "IDN",
+    "IND",
+    "ITA",
+    "JPN",
+    "KOR",
+    "MEX",
+    "NLD",
+    "TUR",
+    "USA",
+    "ZAF"
+   ]
+  },
+  "YIELD_DAILY": {
+   "name": "Daily 10-year government bond yields (MOF, US Treasury, BoE, ECB)",
+   "url": "https://www.mof.go.jp/english/policy/jgbs/reference/interest_rate/historical/jgbcme_all.csv ; https://www.mof.go.jp/jgbs/reference/interest_rate/jgbcm.csv ; https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/... ; https://www.bankofengland.co.uk/boeapps/database/_iadb-fromshowcolumns.asp?csv.x=yes&Datefrom=01/Jan/2015&Dateto=now&SeriesCodes=IUDMNZC&CSVF=TN&UsingCodes=Y&VPD=Y&VFD=N",
+   "rows": 11718,
+   "fetched_at": "2026-09-12T23:40:24",
+   "license": "Public / official terms",
+   "latest": "2026-09-11",
+   "areas": [
+    "EA",
+    "GBR",
+    "JPN",
+    "USA"
+   ]
+  },
+  "FX_DAILY": {
+   "name": "BIS daily exchange rates (USD per unit of local currency)",
+   "url": "https://stats.bis.org/api/v2/data/dataflow/BIS/WS_XRU/1.0/D.JP+XM+GB+CA+KR+AU+CH+CN+IN+BR+MX+HK+SG+ID+TR+ZA.JPY+EUR+GBP+CAD+KRW+AUD+CHF+CNY+INR+BRL+MXN+HKD+SGD+IDR+TRY+ZAR.A?format=csv&startPeriod=2015-01-01",
+   "rows": 47856,
+   "fetched_at": "2026-09-12T23:36:06",
+   "license": "BIS terms",
+   "latest": "2026-09-08",
+   "areas": [
+    "AUS",
+    "BRA",
+    "CAN",
+    "CHE",
+    "CHN",
+    "EA",
+    "GBR",
+    "HKG",
+    "IDN",
+    "IND",
+    "JPN",
+    "KOR",
+    "MEX",
+    "SGP",
+    "TUR",
+    "ZAF"
+   ]
+  },
+  "YAHOO": {
+   "name": "Yahoo Finance daily closes (equity indices, gold futures, US bond/REIT ETFs) - market reference",
+   "url": "https://query1.finance.yahoo.com/v8/finance/chart/",
+   "rows": 8942,
+   "fetched_at": "",
+   "symbols": [
+    "^N225",
+    "^GSPC",
+    "^STOXX50E",
+    "^FTSE",
+    "000300.SS",
+    "^HSI",
+    "^STI",
+    "^SSMI",
+    "^GSPTSE",
+    "^KS11",
+    "^AXJO",
+    "^BSESN",
+    "^BVSP",
+    "^MXX",
+    "^GDAXI",
+    "GC=F",
+    "BND",
+    "VNQ"
+   ],
+   "license": "Reference only; not for redistribution",
+   "latest": "2026-09-11",
+   "areas": [
+    "AUS",
+    "BRA",
+    "CAN",
+    "CHE",
+    "CHN",
+    "DEU",
+    "EA",
+    "GBR",
+    "HKG",
+    "IND",
+    "JPN",
+    "KOR",
+    "MEX",
+    "SGP",
+    "USA",
+    "WLD"
+   ]
+  }
+ },
+ "revisions": {
+  "this_vintage": "2026-09-12",
+  "prev_vintage": null,
+  "count": 0,
+  "new_periods": 0,
+  "top": []
+ }
+}

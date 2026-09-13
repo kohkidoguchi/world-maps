@@ -113,9 +113,81 @@ def corp_summary(d: dict) -> dict:
         "by_theme": dict(sorted(by_theme.items(), key=lambda kv: -kv[1])[:8]),
     }
 
+
+# 研究マップ（直近の重要論文）
+def research_summary(d: dict) -> dict:
+    """直近30日の論文を FWCI（分野正規化被引用）で順位付けし、英語・異常値除外・分野分散で上位を選ぶ。"""
+    import datetime as _dt
+    papers_full = {}
+    pf = ROOT / "research_map" / "data" / "map" / "papers.json"
+    if pf.exists():
+        papers_full = load(pf)
+    topics = {t["id"]: t for t in d.get("topics", [])}
+    today = _dt.date.today()
+    cutoff = (today - _dt.timedelta(days=30)).isoformat()
+    cands = []
+    for pid, p in (d.get("papers") or {}).items():
+        full = papers_full.get(pid, {})
+        date = p.get("d") or ""
+        if date < cutoff or full.get("retracted"):
+            continue
+        if full.get("lang") not in (None, "en"):
+            continue
+        cited = p.get("c") or 0
+        try:
+            days = max(1, (today - _dt.date.fromisoformat(date)).days)
+        except Exception:
+            days = 30
+        # 品質フィルタ：学術誌掲載・所属機関あり・共著・被引用の増え方が自然（Zenodo系ノートや
+        # 自己引用で膨らんだ新着プレプリントを除く）
+        if full.get("source_type") not in (None, "journal"):
+            continue
+        if not p.get("inst") or (p.get("na") or 0) < 2:
+            continue
+        if cited / days > 8 or cited < 8:
+            continue
+        fw = p.get("fw")
+        if fw is None:
+            continue
+        t = topics.get(p.get("tp"), {})
+        cands.append({
+            "id": pid, "title": p.get("t"), "date": date, "type": p.get("ty"),
+            "url": p.get("u"), "source": p.get("src"),
+            "first_author": p.get("au"), "n_authors": p.get("na"),
+            "institution": p.get("inst"), "country": p.get("cc"),
+            "fwci": round(fw, 1), "cited": cited, "top1": p.get("p1"), "score": p.get("sc"),
+            "topic": t.get("name"), "field": t.get("field_name"), "domain": t.get("domain_name"),
+        })
+    cands.sort(key=lambda x: -x["fwci"])
+    picked, per_field = [], {}
+    for c in cands:
+        f = c["field"] or "?"
+        if per_field.get(f, 0) >= 1 and len(picked) < 6:
+            continue
+        per_field[f] = per_field.get(f, 0) + 1
+        picked.append(c)
+        if len(picked) >= 8:
+            break
+    if len(picked) < 6:               # 分野分散で足りなければ埋める
+        for c in cands:
+            if c not in picked:
+                picked.append(c)
+            if len(picked) >= 6:
+                break
+    fields = sorted(d.get("fields", []), key=lambda f: -(f.get("n_recent") or f.get("n") or 0))
+    return {
+        "map": "research", "title": "世界の研究マップ",
+        "generated": d.get("generated"),
+        "exported": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "window": d.get("window"), "totals": d.get("totals"),
+        "recent_candidates": len(cands), "top_papers": picked[:8],
+        "active_fields": [{"name": f.get("name"), "n": f.get("n"), "domain": f.get("domain")} for f in fields[:8]],
+    }
+
 MAPS = {
     "geo":  (ROOT / "geopolitics_map" / "web" / "data.json", geo_summary),
     "corp": (ROOT / "corp_activity_map" / "web" / "data.json", corp_summary),
+    "research": (ROOT / "research_map" / "web" / "data.json", research_summary),
 }
 
 if __name__ == "__main__":

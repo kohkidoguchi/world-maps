@@ -41,6 +41,8 @@ jobs:
           path: |
             geopolitics_map/data
             corp_activity_map/data
+            capital_flows/data/vintages
+            research_map/data
           key: maps-data-${{ github.run_id }}
           restore-keys: |
             maps-data-
@@ -75,12 +77,39 @@ jobs:
           echo "--- corp_activity_map/build.py --json ---" >> out/build.log
           (cd corp_activity_map && python build.py --json) 2>&1 | tee -a out/build.log
 
+      # 資本フロー：統計ベース(observations.csv.gz, コミット済み)に直近の価格だけ差し替えて再生成
+      - name: Build capital-flows nowcast (prices refresh)
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          echo "--- capital_flows: prices refresh ---" >> out/build.log
+          cd capital_flows
+          [ -f data/observations.csv ] || gunzip -k data/observations.csv.gz
+          (python build.py --only prices && python build.py --matrix-json) 2>&1 | tee -a ../out/build.log
+
+      # 研究マップ：直近3週間の新着で状態を更新（OpenAlex 無料枠 ~150 req）。状態は Actions cache に累積。
+      - name: Update research map (OpenAlex)
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          echo "--- research_map/build.py --update ---" >> out/build.log
+          (cd research_map && python build.py --update) 2>&1 | tee -a out/build.log
+
+      - name: Ensure research web/data.json (offline rebuild)
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          echo "--- research_map/build.py --rebuild ---" >> out/build.log
+          (cd research_map && python build.py --rebuild) 2>&1 | tee -a out/build.log
+
       # ── 組み立て：各工程のログを out/build.log に残し、Pages と一緒に公開する（サインイン不要で読める）
       - name: Copy web/ -> out/
         run: |
-          mkdir -p out/geo out/corp
+          mkdir -p out/geo out/corp out/capital out/research
           cp -r geopolitics_map/web/.   out/geo/
           cp -r corp_activity_map/web/. out/corp/
+          cp -r capital_flows/web/.     out/capital/  && cp out/capital/matrix.html out/capital/index.html
+          cp -r research_map/web/.      out/research/
           echo "--- web/ contents ---" >> out/build.log
           ls -la geopolitics_map/web corp_activity_map/web >> out/build.log 2>&1
 

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>世界研究マップ</title>
+<link rel="stylesheet" href="style.css">
+<script src="lib/d3.min.js"></script>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <h1>世界研究マップ <span class="sub-title">Research Map</span></h1>
+    <p class="sub">過去半年に出た全分野の論文（article / preprint / review）のうち、分野・年内で被引用上位1%（またはFWCI≥10）に入った「重要論文」だけを、トピック階層の上に配置したもの。毎日、同じ基準を超えた新しい論文を追加し、若い論文の被引用数を更新する。<span id="window-label"></span></p>
+  </div>
+  <div class="kpis" id="kpis"></div>
+</header>
+
+<main>
+  <section class="panel">
+    <div class="panel-head">
+      <div>
+        <h2>研究地図</h2>
+        <p class="caption">四角＝分野（面積＝重要論文の重みつき量）、中の円＝論文（大きさ＝インパクト、FWCIベース。色＝その論文のトピックの勢い）、線＝論文同士の関係（同じ文献を引用・直接引用・著者が共通）。分野をクリックするとトピック単位の四角に展開。円にカーソルでその論文の関係線を強調、クリックで右に詳細。</p>
+      </div>
+      <div class="controls">
+        <label>面積 <select id="size-mode"><option value="w">重みつき量（推定インパクト合計）</option><option value="n">論文数</option><option value="avg">平均スコア</option></select></label>
+        <label>円の色 <select id="color-mode"><option value="mom">トピックの勢い</option><option value="score">論文スコア</option><option value="domain">ドメイン</option></select></label>
+        <label>トピック最小論文数 <input id="min-n" type="number" min="1" value="1" style="width:60px"></label>
+        <button id="zoom-out" class="btn">全体に戻る</button>
+        <span class="sep"></span>
+        <label class="chk"><input id="show-links" type="checkbox" checked> 関係線</label>
+        <label class="chk"><input class="link-kind" type="checkbox" value="ref" checked> 同じ文献を引用</label>
+        <label class="chk"><input class="link-kind" type="checkbox" value="cite" checked> 直接引用</label>
+        <label class="chk"><input class="link-kind" type="checkbox" value="au" checked> 著者が共通</label>
+        <label>強さ≥ <input id="link-min" type="number" min="0" max="1" step="0.05" value="0.15" style="width:60px"></label>
+        <span class="muted" id="link-count"></span>
+      </div>
+    </div>
+    <div class="map-grid">
+      <div class="map-wrap">
+        <div class="crumb" id="crumb"></div>
+        <svg id="map"></svg>
+        <div class="legend" id="legend"></div>
+      </div>
+      <aside class="detail" id="detail">
+        <p class="muted">円（論文）または四角（トピック）をクリックすると、ここに詳細が表示されます。</p>
+      </aside>
+    </div>
+  </section>
+
+  <section class="two-col">
+    <div class="panel">
+      <div class="panel-head">
+        <h2>勢いのあるトピック</h2>
+        <div class="controls"><label>最小論文数 <input id="mom-min" type="number" min="1" value="5" style="width:60px"></label></div>
+      </div>
+      <p class="caption">重要論文の構成比が、直近2ヶ月とそれ以前で最も上振れ／下振れしたトピック。若い論文は被引用が蓄積途中なので、勢いは「どこに重要論文が集まり始めているか」の入口として読む。</p>
+      <table class="tbl" id="mom-table"></table>
+    </div>
+    <div class="panel">
+      <div class="panel-head">
+        <h2>分野別の量と国別構成</h2>
+      </div>
+      <p class="caption">26分野の重要論文数・重みつき量と、著者所属国の上位（1論文に複数国が付く場合はそれぞれ加算）。</p>
+      <table class="tbl" id="field-table"></table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>前回の更新で加わった論文</h2>
+      <span class="muted" id="new-count"></span>
+    </div>
+    <p class="caption">直近3週間に出た論文のうち、すでに採用基準を超えたもの。ここに載る＝出てすぐ引用され始めている論文。</p>
+    <table class="tbl papers" id="new-table"></table>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>重要論文ランキング</h2>
+      <div class="controls">
+        <label>分野 <select id="paper-field"><option value="">すべて</option></select></label>
+        <label>検索 <input id="paper-q" type="search" placeholder="タイトル・誌名・機関" style="width:220px"></label>
+        <span class="muted" id="paper-count"></span>
+      </div>
+    </div>
+    <p class="caption">スコア順（FWCI＝分野・出版年で正規化した被引用インパクト、1.0が世界平均。分野をまたいで比較できる）。●＝分野・年の上位1%。</p>
+    <table class="tbl papers" id="paper-table"></table>
+  </section>
+
+  <footer class="foot" id="foot"></footer>
+</main>
+<div class="tooltip" id="tip" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>
