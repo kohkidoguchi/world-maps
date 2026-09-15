@@ -31,16 +31,27 @@ jobs:
   run:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      SECRETS_READY: ${{ secrets.GMAIL_ADDRESS != '' && secrets.GMAIL_APP_PASSWORD != '' && secrets.ANTHROPIC_API_KEY != '' }}
     steps:
+      - name: Secrets check
+        run: |
+          if [ "$SECRETS_READY" != "true" ]; then
+            echo "::warning::GMAIL_ADDRESS / GMAIL_APP_PASSWORD / ANTHROPIC_API_KEY が未設定のためスキップ（Settings > Secrets に登録すると動き始めます）"
+          fi
       - uses: actions/checkout@v4
+        if: env.SECRETS_READY == 'true'
       - uses: actions/setup-python@v5
+        if: env.SECRETS_READY == 'true'
         with:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: news_digest/requirements.txt
       - run: pip install -r news_digest/requirements.txt
+        if: env.SECRETS_READY == 'true'
 
       - name: Restore state (seen articles, recent topics, answered replies)
+        if: env.SECRETS_READY == 'true'
         uses: actions/cache@v4
         with:
           path: |
@@ -52,6 +63,7 @@ jobs:
             digest-state-
 
       - name: Determine mode
+        if: env.SECRETS_READY == 'true'
         id: mode
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -66,6 +78,7 @@ jobs:
           echo "mode: $(cat $GITHUB_OUTPUT)"
 
       - name: Run
+        if: env.SECRETS_READY == 'true'
         env:
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
