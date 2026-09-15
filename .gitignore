@@ -17,4 +17,4 @@ out/
 __pycache__/
 *.pyc
 .env
-news_digest/*.json
+news_digest/digest_preview.html
