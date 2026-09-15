@@ -1,0 +1,78 @@
+name: News Digest
+
+on:
+  schedule:
+    - cron: '0 21 * * 0'          # Mon 06:00 JST — digest (cycle 1)
+    - cron: '0 21 * * 3'          # Thu 06:00 JST — digest (cycle 2)
+    - cron: '0 22 * * 6'          # Sun 07:00 JST — FRONTIER
+    - cron: '*/30 0-14 * * 1-6'   # replies: JST 09:00-23:30 Mon-Sat
+    - cron: '*/30 22-23 * * 0-5'  # replies: JST 07:00-08:30 Mon-Sat
+  workflow_dispatch:
+    inputs:
+      edition:
+        description: 'Edition'
+        required: false
+        default: 'replies'
+        type: choice
+        options: [morning, evening, future, replies]
+      only:
+        description: 'Send only to this address (test)'
+        required: false
+        default: ''
+
+concurrency:
+  group: digest
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: news_digest/requirements.txt
+      - run: pip install -r news_digest/requirements.txt
+
+      - name: Restore state (seen articles, recent topics, answered replies)
+        uses: actions/cache@v4
+        with:
+          path: |
+            news_digest/seen_articles.json
+            news_digest/recent_topics.json
+            news_digest/reply_log.json
+          key: digest-state-${{ github.run_id }}
+          restore-keys: |
+            digest-state-
+
+      - name: Determine mode
+        id: mode
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "flag=--${{ inputs.edition }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.schedule }}" = "0 21 * * 0" ] || [ "${{ github.event.schedule }}" = "0 21 * * 3" ]; then
+            echo "flag=--morning" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.schedule }}" = "0 22 * * 6" ]; then
+            echo "flag=--future" >> $GITHUB_OUTPUT
+          else
+            echo "flag=--replies" >> $GITHUB_OUTPUT
+          fi
+          echo "mode: $(cat $GITHUB_OUTPUT)"
+
+      - name: Run
+        env:
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          DUNSRI_GMAIL_APP_PASSWORD: ${{ secrets.DUNSRI_GMAIL_APP_PASSWORD }}
+          DUNSRI_ADDRESS: ${{ secrets.DUNSRI_ADDRESS }}
+          USER_PROFILE: ${{ secrets.USER_PROFILE }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DIGEST_ONLY: ${{ inputs.only }}
+        run: cd news_digest && python digest.py ${{ steps.mode.outputs.flag }}
