@@ -81,7 +81,7 @@ REPLY_LOG_KEEP       = 500 # 処理済みID保持数（古いものから破棄�
 MAX_REPLIES_PER_RUN  = 5   # 1回の実行で回答する返信の上限（ジョブ時間の暴走防止）
 DRY_RUN = "--dry-run" in sys.argv   # 送信せずHTMLをファイルに書き出す（検証用）
 MAX_PER_FEED         = 8    # articles fetched per feed（更新の速いフィードから新着を多めに拾う）
-FRESH_DAYS           = 4    # この日数より古い記事は候補から外す（週2回配信に合わせる）
+FRESH_DAYS           = 3    # この日数より古い記事は候補から外す（毎日配信：新着中心、週末明けも拾える幅）
 MAX_TO_CLAUDE        = 120  # cap sent to Claude（全カテゴリを含める）
 ARTICLES_IN_DIGEST   = 10   # 取り上げるニュース件数（半分の長さの解説＋星の影響度つき）
 

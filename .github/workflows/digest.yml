@@ -2,11 +2,10 @@ name: News Digest
 
 on:
   schedule:
-    - cron: '0 21 * * 0'          # Mon 06:00 JST — digest (cycle 1)
-    - cron: '0 21 * * 3'          # Thu 06:00 JST — digest (cycle 2)
+    - cron: '0 21 * * *'          # every day 06:00 JST — digest
     - cron: '0 22 * * 6'          # Sun 07:00 JST — FRONTIER
-    - cron: '*/30 0-14 * * 1-6'   # replies: JST 09:00-23:30 Mon-Sat
-    - cron: '*/30 22-23 * * 0-5'  # replies: JST 07:00-08:30 Mon-Sat
+    - cron: '*/30 0-14 * * *'     # replies: JST 09:00-23:30 daily
+    - cron: '*/30 22-23 * * *'    # replies: JST 07:00-08:30 daily
   workflow_dispatch:
     inputs:
       edition:
@@ -68,7 +67,7 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "flag=--${{ inputs.edition }}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.schedule }}" = "0 21 * * 0" ] || [ "${{ github.event.schedule }}" = "0 21 * * 3" ]; then
+          elif [ "${{ github.event.schedule }}" = "0 21 * * *" ]; then
             echo "flag=--morning" >> $GITHUB_OUTPUT
           elif [ "${{ github.event.schedule }}" = "0 22 * * 6" ]; then
             echo "flag=--future" >> $GITHUB_OUTPUT
