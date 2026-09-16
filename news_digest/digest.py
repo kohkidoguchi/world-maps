@@ -80,7 +80,8 @@ REPLY_LOG_FILE       = Path(__file__).parent / "reply_log.json"  # 返信で回�
 REPLY_LOG_KEEP       = 500 # 処理済みID保持数（古いものから破棄）
 MAX_REPLIES_PER_RUN  = 5   # 1回の実行で回答する返信の上限（ジョブ時間の暴走防止）
 DRY_RUN = "--dry-run" in sys.argv   # 送信せずHTMLをファイルに書き出す（検証用）
-MAX_PER_FEED         = 5    # articles fetched per feed
+MAX_PER_FEED         = 8    # articles fetched per feed（更新の速いフィードから新着を多めに拾う）
+FRESH_DAYS           = 4    # この日数より古い記事は候補から外す（週2回配信に合わせる）
 MAX_TO_CLAUDE        = 120  # cap sent to Claude（全カテゴリを含める）
 ARTICLES_IN_DIGEST   = 10   # 取り上げるニュース件数（半分の長さの解説＋星の影響度つき）
 
@@ -249,6 +250,9 @@ def fetch_articles() -> list[dict]:
                     seen_urls.add(norm_url)
                     raw_summary = entry.get("summary", entry.get("description", ""))
                     clean_summary = re.sub(r"<[^>]+>", "", raw_summary)[:600]
+                    # 公開日時（UTC）。フィードによって published / updated のどちらかにある
+                    ts = entry.get("published_parsed") or entry.get("updated_parsed")
+                    published_at = datetime(*ts[:6], tzinfo=timezone.utc) if ts else None
                     articles.append({
                         "category": category,
                         "source":   source_name,
@@ -256,6 +260,7 @@ def fetch_articles() -> list[dict]:
                         "url":      entry_url,
                         "summary":  clean_summary.strip(),
                         "published": entry.get("published", ""),
+                        "published_at": published_at,
                     })
             except Exception as e:
                 print(f"  [WARN] {source_name}: {e}")
@@ -876,8 +881,10 @@ def _build_prompt(articles: list[dict], session_label: str, edition: str, market
             "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             "【直近の号で既に取り上げたテーマ（連日の焼き直しを避けるため）】\n"
             + "\n".join(lines)
-            + "\n※ 上記と同じ主題・同じ切り口の記事は、重要な"
-              "新展開・新事実がある場合を除き選ばないこと。読者が『また同じ話か』と感じる焼き直しを避ける。\n"
+            + "\n※【厳守】上記と同じ主題（例：同じ紛争、同じ市場現象、同じ企業・同じ論争）の記事は、"
+              "10件のうち最大2件まで。その2件も、前回とは明確に違う新事実・新展開（新しい決定、数字、当事者）がある場合に限る。"
+              "『前回の続報を別ソースで』は選ばない。残り8件以上は、上記に無い新しい主題から選ぶこと。"
+              "読者は既に「毎回同じ顔ぶれだ」と感じている。\n"
               "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         )
 
@@ -1241,21 +1248,32 @@ def run_digest(edition: str):
     all_articles = fetch_articles()
     print(f"  Fetched {len(all_articles)} articles from {sum(len(v) for v in RSS_FEEDS.values())} feeds")
 
-    # 4. Filter to new articles (by URL and title); fall back to all if too few
+    # 4. Keep only fresh articles (published within FRESH_DAYS), then drop ones already
+    #    fetched for an earlier edition. Slow feeds return the same items for weeks, so
+    #    without the date filter old evergreen pieces keep coming back.
+    now_utc = datetime.now(timezone.utc)
+    def _age_days(a):
+        return (now_utc - a["published_at"]).days if a.get("published_at") else None
+    fresh = [a for a in all_articles if (_age_days(a) is None) or (_age_days(a) <= FRESH_DAYS)]
+    fresh.sort(key=lambda a: a.get("published_at") or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+    print(f"  Fresh (<= {FRESH_DAYS}d): {len(fresh)} / {len(all_articles)}")
     new_articles = [
-        a for a in all_articles
+        a for a in fresh
         if _article_id(a["url"]) not in seen and _title_id(a["title"]) not in seen
     ]
-    if len(new_articles) < 10:
-        print(f"  Only {len(new_articles)} new articles — using full set")
-        new_articles = all_articles
+    if len(new_articles) < 15:
+        # 新着が少ない時も、古い記事へ全量フォールバックはしない：新しい順に補充する
+        extra = [a for a in fresh if a not in new_articles]
+        print(f"  Only {len(new_articles)} unseen fresh articles — topping up with {min(len(extra), 30)} most recent")
+        new_articles = new_articles + extra[:30]
 
-    # 5. Update cache (register both URL and title)
-    now_iso = datetime.now(timezone.utc).isoformat()
-    for a in new_articles:
-        cache[_article_id(a["url"])]   = now_iso
-        cache[_title_id(a["title"])]   = now_iso
-    _save_cache(cache)
+    # 5. Update cache (register both URL and title) — dry-run では触らない
+    if not DRY_RUN:
+        now_iso = now_utc.isoformat()
+        for a in new_articles:
+            cache[_article_id(a["url"])]   = now_iso
+            cache[_title_id(a["title"])]   = now_iso
+        _save_cache(cache)
 
     # 6. Ask Claude to select & summarize (avoid repeating recent themes)
     recent_topics = _load_recent_topics()
