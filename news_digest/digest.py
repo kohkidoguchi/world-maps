@@ -77,6 +77,10 @@ CACHE_FILE           = Path(__file__).parent / "seen_articles.json"
 RECENT_TOPICS_FILE   = Path(__file__).parent / "recent_topics.json"
 RECENT_TOPICS_KEEP   = 6   # 直近何号分のテーマを記憶するか（連日の焼き直しを防ぐ）
 REPLY_LOG_FILE       = Path(__file__).parent / "reply_log.json"  # 返信で回答済みのMessage-ID
+SENT_LOG_FILE        = Path(__file__).parent / "sent_log.json"   # 配信済みの日付（cron取りこぼし対策）
+JST                  = timezone(timedelta(hours=9))
+DIGEST_HOUR_JST      = 6    # この時刻以降、当日分が未配信なら返信チェック時に配信する
+FRONTIER_HOUR_JST    = 7
 REPLY_LOG_KEEP       = 500 # 処理済みID保持数（古いものから破棄）
 MAX_REPLIES_PER_RUN  = 5   # 1回の実行で回答する返信の上限（ジョブ時間の暴走防止）
 DRY_RUN = "--dry-run" in sys.argv   # 送信せずHTMLをファイルに書き出す（検証用）
@@ -212,6 +216,23 @@ def _load_reply_log() -> list:
 def _save_reply_log(ids: list):
     trimmed = ids[-REPLY_LOG_KEEP:]
     REPLY_LOG_FILE.write_text(json.dumps(trimmed, ensure_ascii=False, indent=2), encoding="utf-8")
+
+def _load_sent() -> dict:
+    """{"digest": "YYYY-MM-DD", "frontier": "YYYY-MM-DD"} — 最後に配信した日（JST）。"""
+    if SENT_LOG_FILE.exists():
+        try:
+            return json.loads(SENT_LOG_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+    return {}
+
+def _mark_sent(kind: str):
+    sent = _load_sent()
+    sent[kind] = datetime.now(JST).date().isoformat()
+    SENT_LOG_FILE.write_text(json.dumps(sent, ensure_ascii=False, indent=2), encoding="utf-8")
+
+def _already_sent_today(kind: str) -> bool:
+    return _load_sent().get(kind) == datetime.now(JST).date().isoformat()
 
 def _normalize_url(url: str) -> str:
     """クエリパラメータ・フラグメント・末尾スラッシュを除去して正規化"""
@@ -1225,11 +1246,16 @@ def send_email(subject: str, html_body: str, attachments: list | None = None,
 
 # ── Main Digest Flow ───────────────────────────────────────────────────────────
 
-def run_digest(edition: str):
-    """edition: 'morning' | 'evening'（週2回・月木配信。ラベルは曜日ベース）"""
-    weekday_ja = ["月", "火", "水", "木", "金", "土", "日"][datetime.now().weekday()]
+def run_digest(edition: str, force: bool = False):
+    """edition: 'morning' | 'evening'（毎日配信。ラベルは曜日ベース）
+    force=False のとき、当日分を既に配信済みなら二重送信を避けてスキップする（cron遅延・自己修復との併用対策）。"""
+    now_jst = datetime.now(JST)
+    weekday_ja = ["月", "火", "水", "木", "金", "土", "日"][now_jst.weekday()]
     label = f"{weekday_ja}曜号"
-    print(f"\n[{datetime.now().strftime('%H:%M:%S')}] Starting {label}...")
+    if not force and not DRY_RUN and _already_sent_today("digest"):
+        print(f"  {now_jst.date()} の配信は済んでいます — スキップ（--force で強制）")
+        return
+    print(f"\n[{now_jst.strftime('%H:%M:%S')} JST] Starting {label}...")
 
     # 1. Fetch live market data
     market_data = {}   # 冒頭のマーケット指標は Nowcast シートに置き換え（人口・動態のみ残す）
@@ -1311,6 +1337,7 @@ def run_digest(edition: str):
     # 9. Send email — 各アカウントへ「自分から自分へ」配信
     subject = f"[Digest {label}] {datetime.now().strftime('%m/%d')} — {headline}"
     only = os.environ.get("DIGEST_ONLY", "").lower()   # テスト用：特定アカウントだけに送る
+    sent_any = False
     for acct, pw in DELIVERY_ACCOUNTS:
         if only and acct.lower() != only:
             print(f"  (skip {acct}: DIGEST_ONLY={only})")
@@ -1320,8 +1347,11 @@ def run_digest(edition: str):
                        to_addrs=[acct], sender=acct, sender_pw=pw,
                        inline_images=inline_images)
             print(f"  Sent to {acct}{' (+audio)' if attachments else ''}")
+            sent_any = True
         except Exception as e:
             print(f"  [WARN] {acct} への送信に失敗: {e}")
+    if sent_any and not only:
+        _mark_sent("digest")          # 当日分は配信済み（テスト送信 DIGEST_ONLY は記録しない）
 
     # 10. Record this edition's themes so upcoming editions don't rehash them
     selected_titles = [it.get("title_ja", "") for it in digest.get("articles", []) if it.get("title_ja")]
@@ -1478,8 +1508,11 @@ def build_future_html(digest: dict, articles: list[dict]) -> str:
 </body>
 </html>"""
 
-def run_future_digest():
-    print(f"\n[{datetime.now().strftime('%H:%M:%S')}] Starting FRONTIER (weekly)...")
+def run_future_digest(force: bool = False):
+    if not force and _already_sent_today("frontier"):
+        print("  今日の FRONTIER は配信済み — スキップ（--force で強制）")
+        return
+    print(f"\n[{datetime.now(JST).strftime('%H:%M:%S')} JST] Starting FRONTIER (weekly)...")
 
     # 1. Load shared seen-article cache (deduplicate across days & with daily digest)
     cache = _load_cache()
@@ -1522,12 +1555,16 @@ def run_future_digest():
     html     = build_future_html(digest, new_articles)
     headline = digest.get("headline_word", "")
     subject  = f"[FRONTIER] {datetime.now().strftime('%m/%d')} — {headline}"
+    sent_any = False
     for acct, pw in DELIVERY_ACCOUNTS:
         try:
             send_email(subject, html, to_addrs=[acct], sender=acct, sender_pw=pw)
             print(f"  Sent to {acct}")
+            sent_any = True
         except Exception as e:
             print(f"  [WARN] {acct} への送信に失敗: {e}")
+    if sent_any:
+        _mark_sent("frontier")
 
 # ── 対話ラリー（返信への調査・回答）─────────────────────────────────────────────
 
@@ -1809,6 +1846,23 @@ def run_reply_handler():
     _save_reply_log(list(processed_ids))
     print(f"  Done. Answered {total} reply(ies).")
 
+def ensure_scheduled_sends():
+    """GitHub の cron は遅延・欠落するので、返信チェックのついでに当日分の配信を自己修復する。
+    06:00 JST 以降で今日のダイジェストが未配信なら送る。日曜 07:00 以降で FRONTIER 未配信なら送る。"""
+    now = datetime.now(JST)
+    if now.hour >= DIGEST_HOUR_JST and not _already_sent_today("digest"):
+        print(f"  [catch-up] {now.date()} のダイジェストが未配信 — 今から配信します")
+        try:
+            run_digest("morning")
+        except Exception as e:
+            print(f"  [WARN] catch-up digest failed: {e}")
+    if now.weekday() == 6 and now.hour >= FRONTIER_HOUR_JST and not _already_sent_today("frontier"):
+        print("  [catch-up] 今週の FRONTIER が未配信 — 今から配信します")
+        try:
+            run_future_digest()
+        except Exception as e:
+            print(f"  [WARN] catch-up FRONTIER failed: {e}")
+
 # ── Scheduler ─────────────────────────────────────────────────────────────────
 
 def _validate_env():
@@ -1823,17 +1877,21 @@ def main():
     _validate_env()
 
     args = sys.argv[1:]
+    force = "--force" in args   # 当日分が配信済みでも送る（手動送信・テスト用）
 
     if "--now" in args or "--morning" in args:
-        run_digest("morning")
+        run_digest("morning", force=force or "--now" in args)
         return
     if "--evening" in args:
-        run_digest("evening")
+        run_digest("evening", force=force)
         return
     if "--future" in args:
-        run_future_digest()
+        run_future_digest(force=force)
         return
     if "--replies" in args:
+        # 定時実行の取りこぼしを自己修復してから、返信を処理する
+        if not DRY_RUN:
+            ensure_scheduled_sends()
         run_reply_handler()
         return
 
