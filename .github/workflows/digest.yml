@@ -2,11 +2,12 @@ name: News Digest
 
 on:
   schedule:
-    # GitHub の cron は毎時00/30分に集中して遅延・欠落しやすいので、半端な分にずらす。
-    # さらに --replies は「当日分が未配信なら配信する」自己修復を含むため、
-    # 配信用 cron が落ちても最初の返信チェックで届く。
-    - cron: '13 21 * * *'         # every day 06:13 JST — digest
-    - cron: '13 22 * * 6'         # Sun 07:13 JST — FRONTIER
+    # 主経路は GitHub の cron ではない：Claude Code のクラウド routine が毎日 06:00 JST に
+    # 「[digest]」空コミットを push し、下の push トリガーで即時実行する（cron は発火率 15% 程度で
+    # 06:13 の配信 cron は一度も動かなかった）。以下の cron は予備。--replies は
+    # 「当日分が未配信なら配信する」自己修復を含むので、どれか一つ走れば届く。
+    - cron: '13 21 * * *'         # every day 06:13 JST — digest (backup)
+    - cron: '13 22 * * 6'         # Sun 07:13 JST — FRONTIER (backup)
     - cron: '17,47 0-14 * * *'    # replies: JST 09:17-23:47 daily
     - cron: '17,47 22-23 * * *'   # replies: JST 07:17-08:47 daily
   push:

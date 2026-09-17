@@ -80,7 +80,7 @@ REPLY_LOG_FILE       = Path(__file__).parent / "reply_log.json"  # 返信で回�
 SENT_LOG_FILE        = Path(__file__).parent / "sent_log.json"   # 配信済みの日付（cron取りこぼし対策）
 JST                  = timezone(timedelta(hours=9))
 DIGEST_HOUR_JST      = 6    # この時刻以降、当日分が未配信なら返信チェック時に配信する
-FRONTIER_HOUR_JST    = 7
+FRONTIER_HOUR_JST    = 6    # 日曜はクラウド routine の 06:00 起動で朝刊に続けて FRONTIER も送る
 REPLY_LOG_KEEP       = 500 # 処理済みID保持数（古いものから破棄）
 MAX_REPLIES_PER_RUN  = 5   # 1回の実行で回答する返信の上限（ジョブ時間の暴走防止）
 DRY_RUN = "--dry-run" in sys.argv   # 送信せずHTMLをファイルに書き出す（検証用）
