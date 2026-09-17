@@ -218,13 +218,19 @@ def _save_reply_log(ids: list):
     REPLY_LOG_FILE.write_text(json.dumps(trimmed, ensure_ascii=False, indent=2), encoding="utf-8")
 
 def _load_sent() -> dict:
-    """{"digest": "YYYY-MM-DD", "frontier": "YYYY-MM-DD"} — 最後に配信した日（JST）。"""
-    if SENT_LOG_FILE.exists():
-        try:
-            return json.loads(SENT_LOG_FILE.read_text(encoding="utf-8"))
-        except Exception:
-            return {}
-    return {}
+    """{"digest": "YYYY-MM-DD", "frontier": "YYYY-MM-DD"} — 最後に配信した日（JST）。
+    sent_log.seed.json（リポジトリに置く手動マーカー）があれば日付の新しい方を採用する。
+    ローカルから手動配信した日に Actions が同じ号を二重送信するのを防ぐ用途。"""
+    sent = {}
+    for p in (SENT_LOG_FILE.with_name("sent_log.seed.json"), SENT_LOG_FILE):
+        if p.exists():
+            try:
+                for k, v in json.loads(p.read_text(encoding="utf-8")).items():
+                    if isinstance(v, str) and v > sent.get(k, ""):
+                        sent[k] = v
+            except Exception:
+                pass
+    return sent
 
 def _mark_sent(kind: str):
     sent = _load_sent()
@@ -1348,10 +1354,15 @@ def run_digest(edition: str, force: bool = False):
                        inline_images=inline_images)
             print(f"  Sent to {acct}{' (+audio)' if attachments else ''}")
             sent_any = True
+        except smtplib.SMTPAuthenticationError as e:
+            print(f"::error::{acct} への送信に失敗（認証）: {_diagnose_gmail_auth(e, pw)}")
         except Exception as e:
             print(f"  [WARN] {acct} への送信に失敗: {e}")
     if sent_any and not only:
         _mark_sent("digest")          # 当日分は配信済み（テスト送信 DIGEST_ONLY は記録しない）
+    if not sent_any:
+        # 黙って「成功」にしない：呼び出し側で終了コードを非0にして GitHub の失敗通知を出す
+        raise RuntimeError("どのアカウントにも配信できませんでした（上の認証エラーを確認してください）")
 
     # 10. Record this edition's themes so upcoming editions don't rehash them
     selected_titles = [it.get("title_ja", "") for it in digest.get("articles", []) if it.get("title_ja")]
@@ -1846,22 +1857,27 @@ def run_reply_handler():
     _save_reply_log(list(processed_ids))
     print(f"  Done. Answered {total} reply(ies).")
 
-def ensure_scheduled_sends():
+def ensure_scheduled_sends() -> list:
     """GitHub の cron は遅延・欠落するので、返信チェックのついでに当日分の配信を自己修復する。
-    06:00 JST 以降で今日のダイジェストが未配信なら送る。日曜 07:00 以降で FRONTIER 未配信なら送る。"""
+    06:00 JST 以降で今日のダイジェストが未配信なら送る。日曜 07:00 以降で FRONTIER 未配信なら送る。
+    失敗はここで握りつぶさず、返信処理を済ませた後に呼び出し側が終了コードで報告する。"""
+    failures = []
     now = datetime.now(JST)
     if now.hour >= DIGEST_HOUR_JST and not _already_sent_today("digest"):
         print(f"  [catch-up] {now.date()} のダイジェストが未配信 — 今から配信します")
         try:
             run_digest("morning")
         except Exception as e:
-            print(f"  [WARN] catch-up digest failed: {e}")
+            print(f"::error::catch-up digest failed: {e}")
+            failures.append(f"digest: {e}")
     if now.weekday() == 6 and now.hour >= FRONTIER_HOUR_JST and not _already_sent_today("frontier"):
         print("  [catch-up] 今週の FRONTIER が未配信 — 今から配信します")
         try:
             run_future_digest()
         except Exception as e:
-            print(f"  [WARN] catch-up FRONTIER failed: {e}")
+            print(f"::error::catch-up FRONTIER failed: {e}")
+            failures.append(f"frontier: {e}")
+    return failures
 
 # ── Scheduler ─────────────────────────────────────────────────────────────────
 
@@ -1873,11 +1889,51 @@ def _validate_env():
         print("See .env.example for setup instructions.")
         sys.exit(1)
 
+def _diagnose_gmail_auth(e: Exception, pw: str) -> str:
+    """Gmail の認証エラーを、直すべき設定が分かる日本語にする（値そのものは出さない）。"""
+    msg = str(e)
+    compact = pw.replace(" ", "")
+    shape = f"長さ{len(compact)}{'・英字のみ' if compact.isalpha() else '・英字以外を含む'}"
+    if "5.7.9" in msg or "Application-specific password" in msg:
+        return (f"設定されている値はアプリパスワードではありません（{shape}）。"
+                "Google アカウント > セキュリティ > 2段階認証 > アプリパスワード で発行した16文字を設定してください")
+    if "5.7.8" in msg or "AUTHENTICATIONFAILED" in msg or "Username and Password not accepted" in msg:
+        return (f"アドレスとアプリパスワードの組み合わせが一致しません（{shape}）。"
+                "アドレスの綴りと、そのアカウントで発行したアプリパスワードかを確認してください")
+    return msg
+
+def check_mail_credentials() -> bool:
+    """配信前に各アカウントの Gmail ログインだけ試す（数秒）。
+    認証が壊れていると、記事収集と Claude の生成（＝費用）を済ませた後に送信だけ失敗して
+    「成功」に見えてしまうので、先に落として原因を出す。全滅なら False。"""
+    ok = 0
+    for acct, pw in DELIVERY_ACCOUNTS:
+        if not acct or not pw:
+            continue
+        try:
+            with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as s:
+                s.login(acct, pw)
+            print(f"  [auth] {acct}: OK")
+            ok += 1
+        except smtplib.SMTPAuthenticationError as e:
+            print(f"::error::[auth] {acct}: {_diagnose_gmail_auth(e, pw)}")
+        except Exception as e:
+            print(f"  [auth] {acct}: 接続できません（一時的な可能性）: {e}")
+            ok += 1   # ネットワーク要因は送信側の再試行に任せる
+    return ok > 0
+
 def main():
     _validate_env()
 
     args = sys.argv[1:]
     force = "--force" in args   # 当日分が配信済みでも送る（手動送信・テスト用）
+
+    # 送信・返信の前に Gmail ログインだけ確かめる。壊れていれば生成費用をかける前に落とす。
+    if not DRY_RUN and any(a in args for a in ("--now", "--morning", "--evening", "--future", "--replies")):
+        if not check_mail_credentials():
+            print("::error::どのアカウントも Gmail にログインできません。Secrets の GMAIL_APP_PASSWORD / "
+                  "DUNSRI_GMAIL_APP_PASSWORD（ローカル .env と同じ値）を設定し直してください")
+            sys.exit(2)
 
     if "--now" in args or "--morning" in args:
         run_digest("morning", force=force or "--now" in args)
@@ -1890,9 +1946,11 @@ def main():
         return
     if "--replies" in args:
         # 定時実行の取りこぼしを自己修復してから、返信を処理する
-        if not DRY_RUN:
-            ensure_scheduled_sends()
+        failures = ensure_scheduled_sends() if not DRY_RUN else []
         run_reply_handler()
+        if failures:
+            print(f"ERROR: 配信に失敗しました: {'; '.join(failures)}")
+            sys.exit(3)
         return
 
     # Default: start scheduler
