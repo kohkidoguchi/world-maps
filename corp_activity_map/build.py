@@ -285,7 +285,31 @@ SYSTEM_PROMPT = """あなたは世界の企業活動を観測するアナリス�
 - 文章はすべて日本語（actor.name のみ英語）。"""
 
 
-def extract_events(headlines: list[dict], recent_titles: list[str], run_date: str) -> dict:
+def _usable_events(raw: dict) -> list[dict]:
+    """題名と主体名が入っているイベントだけ（退化出力の空イベントを除く）。"""
+    return [e for e in (raw.get("events") or [])
+            if isinstance(e, dict) and (e.get("title_ja") or "").strip()
+            and ((e.get("actor") or {}).get("name") or "").strip()]
+
+
+def extract_events(headlines: list[dict], recent_titles: list[str], run_date: str, attempts: int = 2) -> dict:
+    """見出し群から企業活動イベントを抽出する。
+    出力がほぼ空（総評だけ書いて空のイベント1件で終わる退化出力、2026-09-16 に発生）なら1回だけ
+    やり直し、それでも駄目なら例外にして前回の地図データを維持する（空の地図を公開しない）。"""
+    n_head = min(len(headlines), MAX_TO_CLAUDE)
+    need = 1 if n_head < 50 else min(10, max(3, n_head // 50))
+    for attempt in range(1, attempts + 1):
+        raw = _extract_once(headlines, recent_titles, run_date)
+        usable = _usable_events(raw)
+        print(f"  events: {len(raw.get('events') or [])} 件（使える {len(usable)} 件、必要 {need} 件以上）")
+        if len(usable) >= need:
+            raw["events"] = usable
+            return raw
+        print(f"  ! 退化出力 — 再試行 {attempt}/{attempts}")
+    raise RuntimeError("Claude の出力が退化（イベントがほぼ空）したため中断。前回の地図データを維持します")
+
+
+def _extract_once(headlines: list[dict], recent_titles: list[str], run_date: str) -> dict:
     import anthropic
 
     client = anthropic.Anthropic()
@@ -304,7 +328,10 @@ def extract_events(headlines: list[dict], recent_titles: list[str], run_date: st
         max_tokens=64000,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user}],
-        output_config={"effort": "medium", "format": {"type": "json_schema", "schema": EVENT_SCHEMA}},
+        # 抽出・分類タスクなので思考は切る。思考が出力予算（max_tokens／effort）を食うと、
+        # 64k で途中終了したり（09-13 以前）、総評だけ書いて空イベント1件で終わったり（09-16）する。
+        thinking={"type": "disabled"},
+        output_config={"format": {"type": "json_schema", "schema": EVENT_SCHEMA}},
     )
     t0 = time.time()
     try:  # 安全分類器による拒否時にサーバー側で別モデルへ切り替える（対応SDK・APIの場合のみ）
@@ -387,6 +414,9 @@ def finalize(raw: dict, headlines: list[dict], run_date: str) -> dict:
     events = []
     for k, ev in enumerate(raw.get("events", [])):
         try:
+            if not (ev.get("title_ja") or "").strip():
+                print(f"  ! event {k} skipped: empty title")
+                continue
             ev["actor"]["country"] = _norm_country(ev["actor"]["country"])
             ev["location"]["country"] = _norm_country(ev["location"]["country"])
             ev["origin"]["country"] = _norm_country(ev["origin"]["country"])

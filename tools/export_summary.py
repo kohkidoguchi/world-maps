@@ -78,9 +78,15 @@ def geo_summary(d: dict) -> dict:
 # 企業活動
 def corp_summary(d: dict) -> dict:
     days = d.get("days") or []
-    day = days[-1] if days else {}
     labels = d.get("action_labels", {})
-    evs = day.get("events") or []
+    # 題名の無い空イベントは捨て、使えるイベントが1件も無い日は飛ばして直近の実のある日を使う
+    def usable(day):
+        return [e for e in (day.get("events") or []) if (e.get("title_ja") or "").strip()]
+    day, evs = {}, []
+    for cand in reversed(days):
+        if usable(cand):
+            day, evs = cand, usable(cand)
+            break
     top = []
     def wtotal(x):
         w = x.get("weight")

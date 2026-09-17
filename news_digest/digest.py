@@ -645,8 +645,9 @@ def _build_maps_html(maps: dict, reading: str) -> str:
         if m.get("png"):
             img = (f'<a href="{url}"><img src="cid:map_{k}" alt="{MAP_TITLES.get(k, k)}" '
                    f'style="width:100%;display:block;border-radius:6px;border:1px solid #e5e7eb;"></a>')
-        tops = "".join(f'<li style="margin:2px 0;">{htmllib.escape(str(e.get("title", "")))}</li>'
-                       for e in sm.get("top_events", [])[:3])
+        titles = [t for t in (str(e.get("title") or "").strip() for e in sm.get("top_events", [])) if t][:3]
+        tops = "".join(f'<li style="margin:2px 0;">{htmllib.escape(t)}</li>' for t in titles)
+        ul = f'<ul style="margin:8px 0 4px;padding-left:18px;font-size:12px;color:#555;line-height:1.6;">{tops}</ul>' if tops else ""
         cards += f"""
         <div style="margin:0 0 14px;">
           <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
@@ -654,7 +655,7 @@ def _build_maps_html(maps: dict, reading: str) -> str:
             <span style="font-size:10px;color:#9ca3af;">{gen}</span>
           </div>
           {img}
-          <ul style="margin:8px 0 4px;padding-left:18px;font-size:12px;color:#555;line-height:1.6;">{tops}</ul>
+          {ul}
           <a href="{url}" style="font-size:12px;color:#4361ee;text-decoration:none;">対話地図を開く →</a>
         </div>"""
     reading_html = ""
