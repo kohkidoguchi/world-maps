@@ -325,7 +325,7 @@ def _extract_once(headlines: list[dict], recent_titles: list[str], run_date: str
 """
     kwargs = dict(
         model=MODEL,
-        max_tokens=64000,
+        max_tokens=120000,   # 純粋な JSON で 100 件 ≈ 52k トークン（09-17 実測）。claude-sonnet-5 の上限は 128k
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user}],
         # 抽出・分類タスクなので思考は切る。思考が出力予算（max_tokens／effort）を食うと、
@@ -352,8 +352,48 @@ def _extract_once(headlines: list[dict], recent_titles: list[str], run_date: str
     u = msg.usage
     print(f"  Claude: {time.time()-t0:.0f}s  in={u.input_tokens} out={u.output_tokens} stop={msg.stop_reason}")
     if msg.stop_reason == "max_tokens":
-        raise RuntimeError(f"出力が max_tokens で途中終了（out={u.output_tokens}）。JSONが不完全なので中断。見出し数か effort を下げてください。")
+        raw = _salvage_truncated(text)
+        if not raw or not raw.get("events"):
+            raise RuntimeError(f"出力が max_tokens で途中終了（out={u.output_tokens}）し、完成したイベントを取り出せず中断。")
+        print(f"  ! 出力が max_tokens で途中終了（out={u.output_tokens}）— 完成している {len(raw['events'])} 件だけ採用")
+        return raw
     return json.loads(text)
+
+
+def _salvage_truncated(text: str) -> dict | None:
+    """途中で切れた JSON から、完成している events の要素までを取り出す。
+    daily_note_ja が events より後ろにあって失われた場合は空文字で補う。"""
+    i = text.find('"events"')
+    j = text.find("[", i) if i >= 0 else -1
+    if j < 0:
+        return None
+    depth, in_str, esc, last_end = 0, False, False, None
+    for k in range(j, len(text)):
+        ch = text[k]
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch in "[{":
+            depth += 1
+        elif ch in "]}":
+            depth -= 1
+            if depth == 1 and ch == "}":   # events 配列直下の要素が閉じた位置
+                last_end = k
+    if last_end is None:
+        return None
+    try:
+        raw = json.loads(text[:last_end + 1] + "]}")
+    except Exception:
+        return None
+    raw.setdefault("daily_note_ja", "")
+    return raw
 
 
 # ═══════════════════════════ 3. 重みづけ ════════════════════════════════════════
