@@ -303,6 +303,8 @@ MARKET_SPECS = [
     ("^TNX",     "米10年債利回り",  "%",       "経済・資本",   "pp"),
     ("^GSPC",    "S&P 500",         "pt",      "経済・資本",   "pct"),
     ("^N225",    "日経225",          "pt",      "経済・資本",   "pct"),
+    ("^STOXX",   "欧州 STOXX 600",  "pt",      "経済・資本",   "pct"),
+    ("^HSI",     "香港ハンセン",     "pt",      "経済・資本",   "pct"),
     ("JPY=X",    "ドル円",           "¥",       "経済・資本",   "pct"),
     # 地政学
     ("DX-Y.NYB", "ドル指数 (DXY)",  "pt",      "地政学",      "pct"),
@@ -338,25 +340,33 @@ def fetch_market_data() -> dict:
     import requests as _req
     from urllib.parse import quote as _q
 
-    def _get_closes(ticker: str) -> list[float]:
+    def _get_closes(ticker: str) -> tuple[list[float], list[int]]:
         url = (
             f"https://query1.finance.yahoo.com/v8/finance/chart/{_q(ticker, safe='')}"
             f"?interval=1d&range=13mo"
         )
         r = _req.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
         r.raise_for_status()
-        closes = r.json()["chart"]["result"][0]["indicators"]["quote"][0]["close"]
-        return [c for c in closes if c is not None]
+        res = r.json()["chart"]["result"][0]
+        closes = res["indicators"]["quote"][0]["close"]
+        stamps = res.get("timestamp") or [0] * len(closes)
+        pairs = [(c, t) for c, t in zip(closes, stamps) if c is not None]
+        return [c for c, _ in pairs], [t for _, t in pairs]
 
     data = {}
     for sym, name, unit, category, change_mode in MARKET_SPECS:
         try:
-            closes = _get_closes(sym)
+            closes, stamps = _get_closes(sym)
             if len(closes) < 5:
                 continue
 
             current = closes[-1]
             prev = closes[-2]                                   # 前営業日
+            # 直近値の日付（各市場の最新営業日。米国は日本時間の早朝に引けるので前日付）
+            def _md(ts):
+                d = datetime.fromtimestamp(ts, JST)
+                return f"{d.month}/{d.day}" if ts else ""
+            asof, asof_prev = _md(stamps[-1]), _md(stamps[-2])
             m1 = closes[-22] if len(closes) > 22 else closes[0]
             y1 = closes[-252] if len(closes) > 252 else closes[0]
 
@@ -378,7 +388,7 @@ def fetch_market_data() -> dict:
 
             if sym == "^TNX":
                 cur_fmt = f"{current:.2f}%"
-            elif sym in ("^GSPC", "^N225", "^SOX", "^IXIC"):
+            elif sym in ("^GSPC", "^N225", "^SOX", "^IXIC", "^STOXX", "^HSI"):
                 cur_fmt = f"{current:,.0f}"
             elif sym == "JPY=X":
                 cur_fmt = f"¥{current:.2f}"
@@ -403,6 +413,8 @@ def fetch_market_data() -> dict:
                 "ch_1m": ch_1m,
                 "ch_1y": ch_1y,
                 "ch_unit": ch_unit,
+                "asof": asof,             # 直近値の日付
+                "asof_prev": asof_prev,   # 前日比の比較対象の日付
             }
         except Exception as e:
             print(f"  [WARN] Market {sym}: {e}")
@@ -421,9 +433,11 @@ def _format_market_for_prompt(market_data: dict) -> str:
             s1d = "+" if d["ch_1d"] >= 0 else ""
             s1m = "+" if d["ch_1m"] >= 0 else ""
             s1y = "+" if d["ch_1y"] >= 0 else ""
+            when = f"{d['asof']}終値" if d.get("asof") else ""
             lines.append(
-                f"  {d['name']}: {d['current_fmt']} "
-                f"(前日 {s1d}{d['ch_1d']}{d['ch_unit']}, "
+                f"  {d['name']}: {d['current_fmt']}{'（' + when + '）' if when else ''} "
+                f"(前日比 {s1d}{d['ch_1d']}{d['ch_unit']}"
+                f"{'［' + d['asof_prev'] + '→' + d['asof'] + '］' if d.get('asof_prev') else ''}, "
                 f"1ヶ月 {s1m}{d['ch_1m']}{d['ch_unit']}, "
                 f"1年 {s1y}{d['ch_1y']}{d['ch_unit']})"
             )
@@ -486,9 +500,10 @@ def _build_indicators_html(market_data: dict, indicators_analysis: str) -> str:
     for cat, items in categories.items():
         rows_html += cat_header(cat)
         for d in items:
+            asof = f'<span style="font-size:10px;color:#9ca3af;white-space:nowrap;">（{d["asof"]}）</span>' if d.get("asof") else ""
             rows_html += f"""
         <tr style="border-bottom:1px solid #f1f5f9;">
-          <td style="{name_td}">{d['name']}</td>
+          <td style="{name_td}">{d['name']} {asof}</td>
           <td style="{val_td}">{d['current_fmt']}</td>
           <td style="{chg_td}">{badge(d['ch_1d'], d['ch_unit'])}</td>
           <td style="{chg_td}">{badge(d['ch_1m'], d['ch_unit'])}</td>
@@ -516,11 +531,13 @@ def _build_indicators_html(market_data: dict, indicators_analysis: str) -> str:
           </td>
         </tr>"""
 
-    legend_html = """
+    legend_text = ("前日比＝直近の終値（括弧内の日付）とその前営業日の比較。株価・為替・商品は％、金利はポイント。"
+                   "人口・動態は年次統計（前年比）。" if market_data else "年次統計（前年比）。出典・年度は各行に表示。")
+    legend_html = f"""
     <tr>
       <td colspan="5"
-          style="padding:4px 14px 6px;font-size:10px;color:#9ca3af;text-align:right;">
-        年次統計（前年比）。出典・年度は各行に表示。
+          style="padding:4px 14px 6px;font-size:10px;color:#9ca3af;text-align:right;line-height:1.5;">
+        {legend_text}
       </td>
     </tr>""" if has_table else ""
 
@@ -537,6 +554,15 @@ def _build_indicators_html(market_data: dict, indicators_analysis: str) -> str:
       {indicators_analysis}
     </p>
   </div>"""
+
+    th = 'padding:10px 3px;font-size:9px;font-weight:600;color:#7c86b5;text-align:center;'
+    if market_data:
+        title = "定点観測 ── きょうの変化"
+        col_heads = (f'<th style="{th}">前日比</th><th style="{th}">1ヶ月</th>'
+                     f'<th style="{th}padding-right:14px;">1年</th>')
+    else:
+        title = "定点観測 ── 人口・動態"
+        col_heads = f'<th colspan="3" style="{th}text-align:right;padding-right:14px;">前年</th>'
 
     table_html = ""
     if has_table:
@@ -557,10 +583,9 @@ def _build_indicators_html(market_data: dict, indicators_analysis: str) -> str:
               style="padding:10px 14px;font-size:10px;font-weight:700;
                      color:#4361ee;letter-spacing:3px;text-transform:uppercase;
                      text-align:left;">
-            定点観測 ── 人口・動態
+            {title}
           </th>
-          <th colspan="3" style="padding:10px 14px 10px 3px;font-size:9px;font-weight:600;
-                     color:#7c86b5;text-align:right;">前年</th>
+          {col_heads}
         </tr>
       </thead>
       <tbody style="background:white;">
@@ -802,12 +827,12 @@ def _build_nowcast_html(cap, reading: str) -> str:
       <div style="font-size:10px;color:#9ca3af;margin-top:6px;">統計時点＝{nc.get('stat_period_ja','')}末。評価変動＝統計残高（全部門）×その後の値動き、取引は含まない。上昇＝紫、下落・金利上昇＝橙。</div>"""
     reading_html = f'<p style="margin:12px 0 0;font-size:13px;color:#333;line-height:1.9;white-space:pre-line;">{reading}</p>' if reading else ""
     return f"""
-  <div style="background:white;margin:0 0 20px;border-radius:0 0 10px 10px;padding:18px 24px;
+  <div style="background:white;margin:8px 0 20px;border-radius:10px;padding:18px 24px;
               box-shadow:0 1px 5px rgba(0,0,0,0.07);border-left:4px solid #6b4fa0;">
     <div style="font-size:10px;font-weight:700;color:#6b4fa0;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;">
-      統計の後で何が動いたか ── 資産クラス別の評価額変動 Nowcast
+      参考 ── 統計期末からの累積評価変動 Nowcast
     </div>
-    <div style="font-size:11px;color:#888;margin-bottom:10px;">資金循環統計（{nc.get('stat_period_ja','')}末）の残高 × 直近の株価・金利・為替　<a href="{url}" style="color:#4361ee;text-decoration:none;">対話版を開く →</a></div>
+    <div style="font-size:11px;color:#888;margin-bottom:10px;">資金循環統計（{nc.get('stat_period_ja','')}末）の残高 × その後の株価・金利・為替の累積。週2回更新。日々の変化は冒頭の定点観測を参照　<a href="{url}" style="color:#4361ee;text-decoration:none;">対話版を開く →</a></div>
     {img}
     {table}
     {reading_html}
@@ -924,7 +949,7 @@ def _build_prompt(articles: list[dict], session_label: str, edition: str, market
 【定点観測 — 最新値（取得日時: {session_label}）】
 {market_block}
 
-※ 上記は実データ。変化幅は1ヶ月前・1年前との比較。
+※ 上記は実データ。前日比は直近の終値とその前営業日の比較（各市場の最新営業日。米国市場は日本時間の早朝に引けた分）。1ヶ月・1年は1ヶ月前・1年前との比較。
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {recent_block}{nowcast_block}{maps_block}{papers_block}
 以下は{session_label}に取得した記事一覧です。カテゴリ別に整理しています。
@@ -946,7 +971,8 @@ def _build_prompt(articles: list[dict], session_label: str, edition: str, market
 各カテゴリから指定件数を必ず選び、合計10件を以下のJSON形式のみで返してください（前後の説明文は不要）：
 
 {{
-  "nowcast_reading": "（Nowcastデータが提示されている場合のみ）統計時点末から直近までに『誰の富が、どの資産で、どれだけ増減したか』を4〜6文で読む。①地域別の価格の動き（株価・金利・為替・金）のうち最も大きい変化とその意味、②評価変動の合計で見て資産が増えた地域・減った地域、増減の主因となった資産クラス、③今日の記事10件との関係——価格の動きを説明する出来事が記事にあるか、逆に記事に出ていない動きが数字に見えるか。文体ルールに従い、耳で聞いて分かる平易な言葉で。金額は兆ドル・億ドルで丸めて言う。データが無ければ空文字列。",
+  "indicators_analysis": "{indicators_instruction}",
+  "nowcast_reading": "（Nowcastデータが提示されている場合のみ）統計時点末から直近までの累積で『誰の富が、どの資産で、どれだけ増減したか』を2〜3文で。評価変動の合計で見て資産が増えた地域・減った地域と、その主因となった資産クラスだけを言う。今日の記事との関連づけは不要（それは indicators_analysis の役目）。文体ルールに従い、金額は兆ドル・億ドルで丸めて言う。データが無ければ空文字列。",
   "maps_reading": "（地図データが提示されている場合のみ）2枚の世界地図が今日示していることを4〜6文で読む。①地政学マップ：世界のどこに注目が集中し、どんな種類の出来事（衝突・協調・制裁など）が動いているか。②企業活動マップ：資本や投資がどこへ向かい、どの産業・国が主役か。③その2つと、上の定点観測・今日の記事10件との関係——地図が記事を裏づけているか、記事に出ていない動きが地図に見えるか。文体ルールに従い、耳で聞いて分かる平易な言葉で。地図データが無ければ空文字列。",
   "articles": [
     {{
@@ -1003,10 +1029,10 @@ def build_html(digest: dict, articles: list[dict], session_label: str, market_da
     now_str = datetime.now().strftime("%Y年%m月%d日 %H:%M")
     article_map = {i + 1: a for i, a in enumerate(articles)}
 
-    # 定点観測 panel
+    # 冒頭＝定点観測（その日の変化＋なぜ動いたか）。統計期末からの累積 Nowcast は末尾の参考欄へ。
     side = side or {}
+    indicators_panel = _build_indicators_html(market_data, digest.get("indicators_analysis", ""))
     nowcast_panel = _build_nowcast_html(side.get("capital"), digest.get("nowcast_reading", ""))
-    indicators_panel = _build_indicators_html({}, "")          # 人口・動態（年次）のみ
     maps_panel = _build_maps_html(maps or {}, digest.get("maps_reading", ""))
     papers_panel = _build_papers_html(side.get("research"), digest.get("papers", []))
 
@@ -1088,10 +1114,7 @@ def build_html(digest: dict, articles: list[dict], session_label: str, market_da
     </div>
   </div>
 
-  <!-- Nowcast: 資産クラス別の評価額変動 -->
-  {nowcast_panel}
-
-  <!-- 定点観測（人口・動態） -->
+  <!-- 定点観測（きょうの変化・なぜ動いたか・人口動態） -->
   {indicators_panel}
 
   <!-- 地図から読む -->
@@ -1102,6 +1125,9 @@ def build_html(digest: dict, articles: list[dict], session_label: str, market_da
 
   <!-- 直近の重要論文 -->
   {papers_panel}
+
+  <!-- 参考: 統計期末からの累積評価変動 Nowcast（週2回更新） -->
+  {nowcast_panel}
 
   <!-- Reply invitation -->
   <div style="background:#1a1a2e;color:#e2e6f3;padding:18px 24px;border-radius:10px;margin:4px 0 20px;">
@@ -1155,9 +1181,9 @@ def build_tts_script(digest: dict, label: str, headline: str) -> str:
     date = datetime.now().strftime("%m月%d日")
     parts = [f"{date}の{label}です。今日のキーワードは、{headline}。"]
 
-    nowcast = digest.get("nowcast_reading", "")
-    if nowcast:
-        parts.append("まず、統計の後で何が動いたか。資産の評価額から。" + nowcast)
+    indicators = digest.get("indicators_analysis", "")
+    if indicators:
+        parts.append("まず、定点観測。きょうの市場の変化と、なぜ動いたか。" + indicators)
 
     maps_reading = digest.get("maps_reading", "")
     if maps_reading:
@@ -1176,10 +1202,14 @@ def build_tts_script(digest: dict, label: str, headline: str) -> str:
 
     papers = digest.get("papers", [])
     if papers:
-        parts.append("最後に、直近の重要な論文です。")
+        parts.append("続いて、直近の重要な論文です。")
         for pp in papers[:6]:
             if pp.get("title_ja"):
                 parts.append(f"{pp.get('title_ja')}。{pp.get('gist','')}")
+
+    nowcast = digest.get("nowcast_reading", "")
+    if nowcast:
+        parts.append("最後に参考として、統計期末からの累積で見た資産の評価額の変化です。" + nowcast)
 
     parts.append("以上、本日のダイジェストでした。")
     return _clean_for_tts("\n\n".join(parts))
@@ -1264,8 +1294,10 @@ def run_digest(edition: str, force: bool = False):
         return
     print(f"\n[{now_jst.strftime('%H:%M:%S')} JST] Starting {label}...")
 
-    # 1. Fetch live market data
-    market_data = {}   # 冒頭のマーケット指標は Nowcast シートに置き換え（人口・動態のみ残す）
+    # 1. Fetch live market data — 冒頭は「その日の変化」（前日比・1ヶ月・1年）。
+    #    統計期末からの累積 Nowcast は末尾の参考欄に回す（2026-09-21 の要望）。
+    market_data = fetch_market_data()
+    print(f"  Market data: {len(market_data)} indicators")
 
     # 1b. Fetch world-map summaries + screenshots from GitHub Pages (optional)
     maps = fetch_map_summaries()
