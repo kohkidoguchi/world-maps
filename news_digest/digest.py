@@ -307,12 +307,19 @@ MARKET_SPECS = [
     ("^N225",    "日経225",          "pt",      "経済・資本",   "pct"),
     ("^STOXX",   "欧州 STOXX 600",  "pt",      "経済・資本",   "pct"),
     ("^HSI",     "香港ハンセン",     "pt",      "経済・資本",   "pct"),
+    ("EEM",      "新興国株",         "$",       "経済・資本",   "pct"),
     ("JPY=X",    "ドル円",           "¥",       "経済・資本",   "pct"),
-    # 地政学
-    ("DX-Y.NYB", "ドル指数 (DXY)",  "pt",      "地政学",      "pct"),
-    ("BZ=F",     "原油 (Brent)",    "$/bbl",   "地政学",      "pct"),
-    ("NG=F",     "天然ガス",         "$/MMBtu", "地政学",      "pct"),
-    ("GC=F",     "金",               "$/oz",    "地政学",      "pct"),
+    # 地政学・資源
+    ("DX-Y.NYB", "ドル指数 (DXY)",  "pt",      "地政学・資源", "pct"),
+    ("BZ=F",     "原油 (Brent)",    "$/bbl",   "地政学・資源", "pct"),
+    ("NG=F",     "天然ガス",         "$/MMBtu", "地政学・資源", "pct"),
+    ("HG=F",     "銅",               "$/lb",    "地政学・資源", "pct"),
+    ("GC=F",     "金",               "$/oz",    "地政学・資源", "pct"),
+    # 不動産・信用・暗号資産（国債・株・通貨・資源で拾えていない資産クラス）
+    ("VNQ",      "米REIT",          "$",       "不動産・信用・暗号資産", "pct"),
+    ("1343.T",   "東証REIT指数",     "¥",       "不動産・信用・暗号資産", "pct"),
+    ("HYG",      "米ハイイールド債",  "$",       "不動産・信用・暗号資産", "pct"),
+    ("BTC-USD",  "ビットコイン",      "$",       "不動産・信用・暗号資産", "pct"),
     # 技術
     ("^SOX",     "SOX半導体指数",    "pt",      "技術",        "pct"),
     ("^IXIC",    "ナスダック総合",   "pt",      "技術",        "pct"),
@@ -492,10 +499,14 @@ def fetch_market_data() -> dict:
                 cur_fmt = f"¥{current:.2f}"
             elif sym in ("CL=F", "BZ=F"):
                 cur_fmt = f"${current:.1f}"
-            elif sym == "NG=F":
+            elif sym in ("NG=F", "HG=F"):
                 cur_fmt = f"${current:.2f}"
-            elif sym == "GC=F":
+            elif sym in ("GC=F", "BTC-USD"):
                 cur_fmt = f"${current:,.0f}"
+            elif sym in ("VNQ", "HYG", "EEM"):
+                cur_fmt = f"${current:,.2f}"
+            elif sym == "1343.T":
+                cur_fmt = f"¥{current:,.0f}"
             elif sym in ("^VIX", "^MOVE"):
                 cur_fmt = f"{current:.1f}"
             else:
@@ -732,10 +743,11 @@ def _format_maps_for_prompt(maps: dict) -> str:
     g = (maps.get("geo") or {}).get("summary") or {}
     if g:
         lines.append(f"\n■ 政治・地政学マップ（GDELT等, 生成 {g.get('generated', '')}）")
-        for e in g.get("top_events", [])[:10]:
+        # 見出しは英語のまま（GDELTの原文）。番号を振って、Claudeに日本語訳を返させる。
+        for i, e in enumerate(g.get("top_events", [])[:10], 1):
             a1, a2 = e.get("a1"), e.get("a2")
             arrow = f"{a1}→{a2}" if a2 and a2 != a1 else f"{a1}"
-            lines.append(f"  - [{e.get('label', '')}] {e.get('title', '')}（{arrow}／{e.get('place', '')}／情報源{e.get('sources')}）")
+            lines.append(f"  - [G{i}][{e.get('label', '')}] {e.get('title', '')}（{arrow}／{e.get('place', '')}／情報源{e.get('sources')}）")
         if g.get("top_countries"):
             cs = ", ".join(f"{c.get('name')}(注目度×{c.get('attention_ratio')})" for c in g["top_countries"][:8])
             lines.append(f"  注目が集まる国（28日平均比）: {cs}")
@@ -754,9 +766,16 @@ def _format_maps_for_prompt(maps: dict) -> str:
     lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
     return "\n".join(lines)
 
-def _build_maps_html(maps: dict, reading: str) -> str:
+def _build_maps_html(maps: dict, reading: str, geo_titles_ja: list | None = None) -> str:
     if not maps:
         return ""
+    # 地政学マップの見出しはGDELTの英語原文なので、Claudeが返した日本語訳に差し替える
+    ja = {}
+    for x in (geo_titles_ja or []):
+        if isinstance(x, dict) and x.get("title_ja"):
+            key = str(x.get("id", "")).upper().lstrip("G")
+            if key.isdigit():
+                ja[int(key)] = x["title_ja"]
     cards = ""
     for k in DIGEST_MAPS:
         m = maps.get(k)
@@ -769,7 +788,12 @@ def _build_maps_html(maps: dict, reading: str) -> str:
         if m.get("png"):
             img = (f'<a href="{url}"><img src="cid:map_{k}" alt="{MAP_TITLES.get(k, k)}" '
                    f'style="width:100%;display:block;border-radius:6px;border:1px solid #e5e7eb;"></a>')
-        titles = [t for t in (str(e.get("title") or "").strip() for e in sm.get("top_events", [])) if t][:3]
+        raw = sm.get("top_events", [])
+        if k == "geo":
+            titles = [ja.get(i) or str(e.get("title") or "").strip() for i, e in enumerate(raw, 1)]
+        else:
+            titles = [str(e.get("title") or "").strip() for e in raw]
+        titles = [t for t in titles if t][:3]
         tops = "".join(f'<li style="margin:2px 0;">{htmllib.escape(t)}</li>' for t in titles)
         ul = f'<ul style="margin:8px 0 4px;padding-left:18px;font-size:12px;color:#555;line-height:1.6;">{tops}</ul>' if tops else ""
         cards += f"""
@@ -1072,6 +1096,9 @@ def _build_prompt(articles: list[dict], session_label: str, edition: str, market
 {{
   "indicators_analysis": "{indicators_instruction}",
   "nowcast_reading": "（Nowcastデータが提示されている場合のみ）統計時点末から直近までの累積で『誰の富が、どの資産で、どれだけ増減したか』を2〜3文で。評価変動の合計で見て資産が増えた地域・減った地域と、その主因となった資産クラスだけを言う。今日の記事との関連づけは不要（それは indicators_analysis の役目）。文体ルールに従い、金額は兆ドル・億ドルで丸めて言う。データが無ければ空文字列。",
+  "geo_titles_ja": [
+    {{"id": "G1", "title_ja": "[G1]の見出しの日本語訳（40字以内。固有名詞は日本語の通称に。報道見出しとして自然な日本語にする）"}}
+  ],
   "maps_reading": "（地図データが提示されている場合のみ）2枚の世界地図が今日示していることを4〜6文で読む。①地政学マップ：世界のどこに注目が集中し、どんな種類の出来事（衝突・協調・制裁など）が動いているか。②企業活動マップ：資本や投資がどこへ向かい、どの産業・国が主役か。③その2つと、上の定点観測・今日の記事10件との関係——地図が記事を裏づけているか、記事に出ていない動きが地図に見えるか。文体ルールに従い、耳で聞いて分かる平易な言葉で。地図データが無ければ空文字列。",
   "articles": [
     {{
@@ -1080,7 +1107,8 @@ def _build_prompt(articles: list[dict], session_label: str, edition: str, market
       "title_ja": "記事タイトルの日本語訳（意訳可・簡潔に）",
       "impact": <影響度を5段階の整数（1〜5）で。5=世界や社会を大きく動かす重大ニュース、4=重要、3=中程度、2=やや小さい、1=限定的。その出来事が経済・政治・社会に与えるインパクトの大きさで判断する>,
       "unique_point": "この記事のユニークな点・最大のポイントを1文で端的に（要約の前に読者の関心を引く導入）",
-      "summary_ja": "この時事ニュースについて【①何が起きたか】【②なぜそうなったか・背景の構造】【③何を意味するか】を簡潔にまとめる。全体で従来の半分・200字程度に収める。特に②では、この出来事の背後で働く構造やトレンドを説明する（関連するトレンド解説記事の知見があれば、その内容も取り入れて背景を厚くしてよい）。ただし『権力は腐敗する』式の何にでも当てはまる抽象論は避け、この出来事に根ざした具体的な洞察にする。文体ルールに従い、耳で聞いて一度で分かる平易な言葉で。自然科学・哲学の記事は①②③にこだわらず最適な形で書く。"
+      "what_happened": "【起きたこと】事実だけを書く。誰が・いつ・何を・どれだけ（数字、当事者、決定内容、規模）。解釈・評価・見通しはここに書かない。100〜130字。",
+      "reading": "【読み解き】起きたことの意味を書く。①なぜそうなったか（この出来事を生んだ構造・力学。関連するトレンド解説記事の知見があれば取り込んでよい）、②だから何が変わるのか（誰にどう効いてくるか、次に何が起きうるか）。『権力は腐敗する』式の何にでも当てはまる抽象論は禁止。この出来事に根ざした具体的な洞察にする。130〜170字。"
     }}
   ],
   "papers": [
@@ -1094,6 +1122,8 @@ def _build_prompt(articles: list[dict], session_label: str, edition: str, market
 ※同じ出来事・発表を複数のソースが報じている場合は、最も詳細な1件のみ選ぶこと。
 ※【時事ニュース優先・重要】取り上げる10件は、最近実際に起きた出来事・発表・動き（＝時事ニュース）を選ぶこと。時系列のない一般論・トレンド解説エッセイを単体で取り上げてはいけない。そうしたトレンド解説記事は、選んだ時事ニュースの背景・構造を説明する材料として summary_ja の②に活用すること。速報の羅列ではなく、構造的な意味を持つ出来事を優先する。もしあるカテゴリのプールに時事性のある記事が乏しい場合は、その中で最も『出来事性』の高いものを選ぶ。
 ※【重要論文】提示された論文 [P1]..[Pn] すべてについて、papers 配列に id・title_ja・gist を返すこと（論文が提示されていなければ空配列）。gist は「何を明らかにしたか」と「なぜ重要か」を平易に。
+※【記事は2段構え・厳守】各記事は what_happened（起きたこと＝事実のみ）と reading（読み解き＝意味と含意）を必ず分ける。what_happened に評価・見通しを混ぜない。reading に新しい事実を足さない。自然科学・哲学・芸術の記事も同じ2段構えで書く（what_happened＝その研究や作品が示したこと／reading＝それが何を意味するか）。
+※【地図の見出し翻訳】地政学マップの [G1]..[Gn] すべてについて、geo_titles_ja に id と title_ja（日本語訳）を返すこと（地図データが無ければ空配列）。英語の見出しをそのまま残さない。
 ※【テーマ分散・厳守】10件は互いに異なる主題で構成すること。同一号の中で同じ主題の記事を偏って選ばない（例：AI・生成AIばかり、同じ紛争ばかり、にしない）。同種の候補しかない場合のみ重複を許容する。
 ※「投資家として」「コンサルタントとして」「政治家として」のような、特定の立場に立った示唆・アドバイスは書かないこと。あくまで事象そのものの構造と含意を描くこと。
 """
@@ -1127,7 +1157,7 @@ def build_html(digest: dict, articles: list[dict], session_label: str, market_da
     side = side or {}
     indicators_panel = _build_indicators_html(market_data, digest.get("indicators_analysis", ""))
     nowcast_panel = _build_nowcast_html(side.get("capital"), digest.get("nowcast_reading", ""))
-    maps_panel = _build_maps_html(maps or {}, digest.get("maps_reading", ""))
+    maps_panel = _build_maps_html(maps or {}, digest.get("maps_reading", ""), digest.get("geo_titles_ja", []))
     papers_panel = _build_papers_html(side.get("research"), digest.get("papers", []))
 
     def stars(n) -> str:
@@ -1149,6 +1179,22 @@ def build_html(digest: dict, articles: list[dict], session_label: str, market_da
             <span style="font-size:12px;color:#f59e0b;letter-spacing:1px;white-space:nowrap;"
                   title="影響度">{star_str}</span>"""
 
+        def block(label: str, text: str, color: str) -> str:
+            if not text:
+                return ""
+            return f"""
+          <div style="margin-top:12px;">
+            <div style="font-size:10px;font-weight:700;color:{color};letter-spacing:2px;
+                        margin-bottom:4px;">{label}</div>
+            <p style="margin:0;font-size:13px;color:#444;line-height:1.85;white-space:pre-line;">{text}</p>
+          </div>"""
+
+        # 「起きたこと」と「読み解き」を分けて示す。旧形式（summary_ja 一本）も壊さない。
+        body_html = (block("起きたこと", item.get("what_happened", ""), "#1a1a2e")
+                     + block("読み解き", item.get("reading", ""), "#4361ee"))
+        if not body_html:
+            body_html = block("", item.get("summary_ja", ""), "#1a1a2e")
+
         cards_html += f"""
         <div style="background:white;margin:0 0 20px;border-radius:10px;
                     padding:20px 24px;box-shadow:0 1px 5px rgba(0,0,0,0.07);">
@@ -1169,9 +1215,7 @@ def build_html(digest: dict, articles: list[dict], session_label: str, market_da
               🔑 {item.get('unique_point','')}
             </p>
           </div>
-          <p style="margin:0;font-size:13px;color:#444;line-height:1.85;white-space:pre-line;">
-            {item.get('summary_ja','')}
-          </p>
+          {body_html}
         </div>"""
 
     return f"""<!DOCTYPE html>
@@ -1273,9 +1317,13 @@ def build_tts_script(digest: dict, label: str, headline: str) -> str:
         for i, item in enumerate(articles, 1):
             impact = item.get("impact")
             impact_str = f"影響度は5段階中の{int(impact)}。" if impact else ""
+            what = item.get("what_happened", "")
+            reading = item.get("reading", "")
+            body = (f"起きたこと。{what} 読み解き。{reading}"
+                    if (what or reading) else item.get("summary_ja", ""))
             parts.append(
                 f"{i}件目。{item.get('title_ja','')}。{impact_str}"
-                f"{item.get('unique_point','')} {item.get('summary_ja','')}"
+                f"{item.get('unique_point','')} {body}"
             )
 
     papers = digest.get("papers", [])
