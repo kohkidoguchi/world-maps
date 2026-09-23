@@ -722,14 +722,17 @@ def fetch_map_summaries(keys: list | None = None) -> dict:
         try:
             r = _req.get(f"{MAPS_BASE_URL}/{k}/summary.json", timeout=20)
             r.raise_for_status()
-            item = {"summary": r.json(), "url": f"{MAPS_BASE_URL}/{k}/", "png": None}
-            try:
-                pr = _req.get(f"{MAPS_BASE_URL}/{k}/map.png", timeout=30)
-                pr.raise_for_status()
-                if pr.headers.get("content-type", "").startswith("image/"):
-                    item["png"] = pr.content
-            except Exception as e:
-                print(f"  [WARN] map png {k}: {e}")
+            item = {"summary": r.json(), "url": f"{MAPS_BASE_URL}/{k}/", "png": None,
+                    "png_w": None, "png_e": None}   # 全景＋（細い画面用の）西半分・東半分
+            for field, fname in (("png", "map.png"), ("png_w", "map_w.png"), ("png_e", "map_e.png")):
+                try:
+                    pr = _req.get(f"{MAPS_BASE_URL}/{k}/{fname}", timeout=30)
+                    pr.raise_for_status()
+                    if pr.headers.get("content-type", "").startswith("image/"):
+                        item[field] = pr.content
+                except Exception as e:
+                    if field == "png":
+                        print(f"  [WARN] map png {k}: {e}")
             out[k] = item
         except Exception as e:
             print(f"  [WARN] map summary {k}: {e}")
@@ -784,10 +787,20 @@ def _build_maps_html(maps: dict, reading: str, geo_titles_ja: list | None = None
         sm = m.get("summary") or {}
         gen = (sm.get("generated") or sm.get("date") or "")[:16].replace("T", " ")
         url = m["url"]
+        # 画像：広い画面は全景1枚、細い画面（スマホ）は西・東の2枚を縦に積む。
+        # メディアクエリを解釈しないメールソフトでは全景だけが出る（＝従来どおり）。
+        frame = "width:100%;display:block;border-radius:6px;border:1px solid #e5e7eb;"
         img = ""
         if m.get("png"):
-            img = (f'<a href="{url}"><img src="cid:map_{k}" alt="{MAP_TITLES.get(k, k)}" '
-                   f'style="width:100%;display:block;border-radius:6px;border:1px solid #e5e7eb;"></a>')
+            img = (f'<a href="{url}" class="wide"><img src="cid:map_{k}" alt="{MAP_TITLES.get(k, k)}" '
+                   f'style="{frame}"></a>')
+        if m.get("png_w") and m.get("png_e"):
+            halves = "".join(
+                f'<a href="{url}"><img src="cid:map_{k}_{side}" alt="{MAP_TITLES.get(k, k)}（{label}）" '
+                f'style="{frame}margin-bottom:6px;"></a>'
+                f'<div style="font-size:10px;color:#9ca3af;margin:-2px 0 8px;">{label}</div>'
+                for side, label in (("w", "南北アメリカ〜欧州・アフリカ"), ("e", "欧州〜アジア・太平洋")))
+            img += f'<div class="narrow" style="display:none;max-height:0;overflow:hidden;">{halves}</div>'
         raw = sm.get("top_events", [])
         if k == "geo":
             titles = [ja.get(i) or str(e.get("title") or "").strip() for i, e in enumerate(raw, 1)]
@@ -1222,6 +1235,13 @@ def build_html(digest: dict, articles: list[dict], session_label: str, market_da
 <html lang="ja">
 <head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  /* スマホでは世界地図の全景をやめ、西半分・東半分を縦に積んで大きく見せる */
+  @media only screen and (max-width:520px) {{
+    .wide {{ display:none !important; max-height:0 !important; overflow:hidden !important; }}
+    .narrow {{ display:block !important; max-height:none !important; overflow:visible !important; }}
+  }}
+</style>
 </head>
 <body style="margin:0;padding:0;background:#f5f5f3;font-family:'Helvetica Neue',Arial,sans-serif;">
 <div style="max-width:660px;margin:0 auto;padding:24px 16px;">
@@ -1474,7 +1494,11 @@ def run_digest(edition: str, force: bool = False):
 
     # 7. Build HTML
     html = build_html(digest, new_articles, label, market_data, maps, side)
-    inline_images = [(f"map_{k}", m["png"]) for k, m in maps.items() if m.get("png")]
+    inline_images = []
+    for k, m in maps.items():
+        for cid, field in ((f"map_{k}", "png"), (f"map_{k}_w", "png_w"), (f"map_{k}_e", "png_e")):
+            if m.get(field):
+                inline_images.append((cid, m[field]))
     if side.get("capital", {}).get("png"):
         inline_images.append(("sheet_capital", side["capital"]["png"]))
     if DRY_RUN:

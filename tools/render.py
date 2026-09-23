@@ -40,6 +40,35 @@ def shot_page(browser, rel: str, png: Path, wait_ms: int = 4000) -> bool:
     finally:
         page.close()
 
+def shot_map(browser, rel: str, outdir: Path, wait_ms: int = 4500) -> bool:
+    """地図パネル（#map の SVG）だけを撮る。ページ全体を撮ると、見出し・操作パネル・凡例に
+    画素の6割を取られ、スマホでメールを開いたとき地図が読めないため。
+    あわせて、左右に少し重なる2枚（西半分・東半分）を出す — 細い画面ではこの2枚を縦に積む。"""
+    page = browser.new_page(viewport={"width": 1500, "height": 1200}, device_scale_factor=2)
+    try:
+        page.goto(f"http://127.0.0.1:{PORT}/{rel}", wait_until="networkidle", timeout=90000)
+        page.wait_for_timeout(wait_ms)
+        el = page.locator("#map").first
+        box = el.bounding_box() if el.count() else None
+        if not box or box["width"] < 200 or box["height"] < 120:
+            print(f"[WARN] {rel}: #map not found, falling back to full page")
+            page.screenshot(path=str(outdir / "map.png"), full_page=False)
+            return True
+        el.screenshot(path=str(outdir / "map.png"))
+        ov = 0.06                                     # 端の出来事が切れないよう6%重ねる
+        half = box["width"] * (0.5 + ov)
+        for name, x in (("map_w.png", box["x"]), ("map_e.png", box["x"] + box["width"] - half)):
+            page.screenshot(path=str(outdir / name),
+                            clip={"x": x, "y": box["y"], "width": half, "height": box["height"]})
+        sizes = ", ".join(f"{n} {(outdir / n).stat().st_size//1024}KB" for n in ("map.png", "map_w.png", "map_e.png"))
+        print(f"wrote {outdir.relative_to(ROOT)}/: {sizes}")
+        return True
+    except Exception as e:
+        print(f"[WARN] {rel}: render failed: {e}")
+        return False
+    finally:
+        page.close()
+
 def capital(browser) -> bool:
     """資本フロー: Nowcast の数値と表の画像を取り出す。"""
     d = OUT / "capital"
@@ -80,11 +109,14 @@ def main() -> int:
         with sync_playwright() as p:
             browser = p.chromium.launch()
             for m in ("geo", "corp", "research"):
-                if (OUT / m / "index.html").exists():
-                    if not shot_page(browser, f"{m}/", OUT / m / "map.png"):
-                        rc = 1
-                else:
+                if not (OUT / m / "index.html").exists():
                     print(f"[WARN] {m}: no index.html, skip")
+                    continue
+                # geo/corp はメールに載るので地図だけを大きく撮る。research は全景のまま。
+                ok = (shot_map(browser, f"{m}/", OUT / m) if m in ("geo", "corp")
+                      else shot_page(browser, f"{m}/", OUT / m / "map.png"))
+                if not ok:
+                    rc = 1
             if not capital(browser):
                 rc = 1
             browser.close()
