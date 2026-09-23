@@ -23,7 +23,7 @@ import sys
 import schedule
 import time
 import hashlib
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
@@ -301,6 +301,8 @@ def fetch_articles() -> list[dict]:
 MARKET_SPECS = [
     # 経済・資本
     ("^TNX",     "米10年債利回り",  "%",       "経済・資本",   "pp"),
+    ("JP10Y",    "日本10年債利回り", "%",       "経済・資本",   "pp"),   # MOF（公式CSV）
+    ("DE10Y",    "独10年債利回り",   "%",       "経済・資本",   "pp"),   # ドイツ連銀（ユーロ圏の基準金利）
     ("^GSPC",    "S&P 500",         "pt",      "経済・資本",   "pct"),
     ("^N225",    "日経225",          "pt",      "経済・資本",   "pct"),
     ("^STOXX",   "欧州 STOXX 600",  "pt",      "経済・資本",   "pct"),
@@ -335,6 +337,94 @@ STRUCTURAL_STATS = [
      "asof": "2023", "source": "Eurostat(推計)"},
 ]
 
+# ── 国債利回り（Yahoo は米国債しか持たないので、各国の公式ソースから取る）──────────
+# それぞれ [(YYYY-MM-DD, 利回り%)] の昇順リストを返す。取れなければ空リスト。
+# 公表は1〜2営業日遅れることがあるので、表には各行の基準日を出す。
+
+def _jgb_10y() -> list[tuple[str, float]]:
+    """財務省の金利情報。過去分（履歴CSV）＋当月分（更新が速い方）をつなぐ。"""
+    import requests as _req
+    import csv as _csv, io as _io, re as _re
+    ua = {"User-Agent": "Mozilla/5.0"}
+    ser: dict[str, float] = {}
+    for url, is_hist in (
+        ("https://www.mof.go.jp/english/policy/jgbs/reference/interest_rate/historical/jgbcme_all.csv", True),
+        ("https://www.mof.go.jp/jgbs/reference/interest_rate/jgbcm.csv", False),
+    ):
+        try:
+            r = _req.get(url, timeout=40, headers=ua)
+            r.raise_for_status()
+            rows = list(_csv.reader(_io.StringIO(r.content.decode("cp932", "replace"))))
+            hdr = next(i for i, x in enumerate(rows) if x and x[0].strip() in ("Date", "基準日"))
+            c10 = next(i for i, c in enumerate(rows[hdr]) if c.strip() in ("10Y", "10年"))
+            era = {"R": 2018, "H": 1988, "S": 1925}   # 和暦（R8.9.1 = 2026-09-01）
+            for x in rows[hdr + 1:]:
+                if not x or len(x) <= c10:
+                    continue
+                s = x[0].strip()
+                try:
+                    m = _re.fullmatch(r"([RHS])(\d+)\.(\d+)\.(\d+)", s)
+                    if m:
+                        d = date(era[m.group(1)] + int(m.group(2)), int(m.group(3)), int(m.group(4)))
+                    else:
+                        y, mo, dd = map(int, s.split("/"))
+                        d = date(y, mo, dd)
+                    ser[d.isoformat()] = float(x[c10])
+                except (ValueError, KeyError):
+                    continue
+            if is_hist and not ser:
+                print("  [WARN] JGB history: no rows parsed")
+        except Exception as e:
+            print(f"  [WARN] JGB {'history' if is_hist else 'current'}: {e}")
+    return sorted(ser.items())
+
+def _bund_10y() -> list[tuple[str, float]]:
+    """ドイツ連邦銀行 BBSIS の日次10年国債利回り（ユーロ圏のベンチマーク）。"""
+    import requests as _req
+    import csv as _csv, io as _io
+    url = ("https://api.statistiken.bundesbank.de/rest/download/BBSIS/"
+           "D.I.ZAR.ZI.EUR.S1311.B.A604.R10XX.R.A.A._Z._Z.A?format=csv&lang=en")
+    try:
+        r = _req.get(url, timeout=40, headers={"User-Agent": "Mozilla/5.0"})
+        r.raise_for_status()
+        ser = []
+        for x in _csv.reader(_io.StringIO(r.text)):
+            # 先頭のメタ行（category 等）を飛ばし、日付で始まる行だけ拾う
+            if len(x) >= 2 and len(x[0]) == 10 and x[0][4] == "-":
+                try:
+                    ser.append((x[0], float(x[1])))
+                except ValueError:
+                    continue
+        return sorted(ser)
+    except Exception as e:
+        print(f"  [WARN] Bund 10y: {e}")
+        return []
+
+BOND_SOURCES = {"JP10Y": _jgb_10y, "DE10Y": _bund_10y}
+
+def _bond_entry(sym: str, name: str, unit: str, category: str) -> dict | None:
+    """利回り系列を market_data と同じ形（現在値・前日比・1ヶ月・1年、単位pp）に整える。"""
+    ser = BOND_SOURCES[sym]()
+    if len(ser) < 5:
+        return None
+    today = date.today()
+    def at(days: int) -> float:
+        past = (today - timedelta(days=days)).isoformat()
+        older = [v for d, v in ser if d <= past]
+        return older[-1] if older else ser[0][1]
+    (d1, current), (d0, prev) = ser[-1], ser[-2]
+    def _md(iso: str) -> str:
+        y, m, dd = map(int, iso.split("-"))
+        return f"{m}/{dd}"
+    return {
+        "name": name, "unit": unit, "category": category,
+        "current": current, "current_fmt": f"{current:.2f}%",
+        "ch_1d": round(current - prev, 2) or 0.0,
+        "ch_1m": round(current - at(30), 2) or 0.0,
+        "ch_1y": round(current - at(365), 2) or 0.0,
+        "ch_unit": "pp", "asof": _md(d1), "asof_prev": _md(d0),
+    }
+
 def fetch_market_data() -> dict:
     """Fetch live market data from Yahoo Finance API using requests."""
     import requests as _req
@@ -355,6 +445,14 @@ def fetch_market_data() -> dict:
 
     data = {}
     for sym, name, unit, category, change_mode in MARKET_SPECS:
+        if sym in BOND_SOURCES:                     # Yahoo 以外の公式ソース
+            try:
+                entry = _bond_entry(sym, name, unit, category)
+                if entry:
+                    data[sym] = entry
+            except Exception as e:
+                print(f"  [WARN] Bond {sym}: {e}")
+            continue
         try:
             closes, stamps = _get_closes(sym)
             if len(closes) < 5:
@@ -468,12 +566,13 @@ def _build_indicators_html(market_data: dict, indicators_analysis: str) -> str:
         positive = val >= 0
         color  = "#16a34a" if positive else "#dc2626"
         bg     = "#dcfce7" if positive else "#fee2e2"
-        sign   = "+" if positive else ""
+        # 桁数を揃える（利回りは 0.20pp、％は 1.2% のように）
+        num = f"{val:+.2f}" if unit == "pp" else f"{val:+.1f}"
         return (
             f'<span style="display:inline-block;min-width:48px;text-align:center;'
             f'background:{bg};color:{color};font-size:10px;'
             f'padding:2px 0;border-radius:3px;font-weight:700;'
-            f'white-space:nowrap;">{sign}{val}{unit}</span>'
+            f'white-space:nowrap;">{num}{unit}</span>'
         )
 
     def cat_header(cat: str) -> str:
@@ -981,12 +1080,7 @@ def _build_prompt(articles: list[dict], session_label: str, edition: str, market
       "title_ja": "記事タイトルの日本語訳（意訳可・簡潔に）",
       "impact": <影響度を5段階の整数（1〜5）で。5=世界や社会を大きく動かす重大ニュース、4=重要、3=中程度、2=やや小さい、1=限定的。その出来事が経済・政治・社会に与えるインパクトの大きさで判断する>,
       "unique_point": "この記事のユニークな点・最大のポイントを1文で端的に（要約の前に読者の関心を引く導入）",
-      "summary_ja": "この時事ニュースについて【①何が起きたか】【②なぜそうなったか・背景の構造】【③何を意味するか】を簡潔にまとめる。全体で従来の半分・200字程度に収める。特に②では、この出来事の背後で働く構造やトレンドを説明する（関連するトレンド解説記事の知見があれば、その内容も取り入れて背景を厚くしてよい）。ただし『権力は腐敗する』式の何にでも当てはまる抽象論は避け、この出来事に根ざした具体的な洞察にする。文体ルールに従い、耳で聞いて一度で分かる平易な言葉で。自然科学・哲学の記事は①②③にこだわらず最適な形で書く。",
-      "one_point_lesson": {{
-        "field": "分野名（経済／社会／ビジネス／政治／技術／倫理／自然科学／芸術 など）",
-        "theme": "解説テーマ名（例：比較優位、認知バイアス、地政学リスク など）",
-        "content": "記事に関連するトピックをひとつ選び、学習のためのワンポイント解説を書く。背景知識がなくても分かるよう具体例を交えて平易に（100〜130字程度）"
-      }}
+      "summary_ja": "この時事ニュースについて【①何が起きたか】【②なぜそうなったか・背景の構造】【③何を意味するか】を簡潔にまとめる。全体で従来の半分・200字程度に収める。特に②では、この出来事の背後で働く構造やトレンドを説明する（関連するトレンド解説記事の知見があれば、その内容も取り入れて背景を厚くしてよい）。ただし『権力は腐敗する』式の何にでも当てはまる抽象論は避け、この出来事に根ざした具体的な洞察にする。文体ルールに従い、耳で聞いて一度で分かる平易な言葉で。自然科学・哲学の記事は①②③にこだわらず最適な形で書く。"
     }}
   ],
   "papers": [
@@ -1055,21 +1149,6 @@ def build_html(digest: dict, articles: list[dict], session_label: str, market_da
             <span style="font-size:12px;color:#f59e0b;letter-spacing:1px;white-space:nowrap;"
                   title="影響度">{star_str}</span>"""
 
-        lesson = item.get("one_point_lesson", {})
-        lesson_html = ""
-        if lesson:
-            lesson_html = f"""
-          <div style="background:#f0fdf4;border-left:3px solid #16a34a;
-                      padding:12px 16px;margin-top:14px;border-radius:4px;">
-            <div style="font-size:11px;font-weight:700;color:#16a34a;
-                        letter-spacing:1px;margin-bottom:4px;">
-              📚 ワンポイント解説 — {lesson.get('field','')}「{lesson.get('theme','')}」
-            </div>
-            <p style="margin:0;font-size:12px;color:#333;line-height:1.75;">
-              {lesson.get('content','')}
-            </p>
-          </div>"""
-
         cards_html += f"""
         <div style="background:white;margin:0 0 20px;border-radius:10px;
                     padding:20px 24px;box-shadow:0 1px 5px rgba(0,0,0,0.07);">
@@ -1090,10 +1169,9 @@ def build_html(digest: dict, articles: list[dict], session_label: str, market_da
               🔑 {item.get('unique_point','')}
             </p>
           </div>
-          <p style="margin:0 0 10px;font-size:13px;color:#444;line-height:1.85;white-space:pre-line;">
+          <p style="margin:0;font-size:13px;color:#444;line-height:1.85;white-space:pre-line;">
             {item.get('summary_ja','')}
           </p>
-          {lesson_html}
         </div>"""
 
     return f"""<!DOCTYPE html>
