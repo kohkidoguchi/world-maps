@@ -2,8 +2,9 @@ name: World Maps
 
 on:
   schedule:
-    - cron: '0 18 * * 0'   # Mon 03:00 JST — ahead of the Monday digest (06:00 JST)
-    - cron: '0 18 * * 3'   # Thu 03:00 JST — ahead of the Thursday digest
+    # 毎日 03:00 JST（本紙は毎日 06:00 JST 配信なので、その3時間前に作り直す）。
+    # GitHub の cron は落ちることがあるが、地図が古ければ前回分がそのまま載るだけで本紙は出る。
+    - cron: '0 18 * * *'   # daily 03:00 JST — ahead of the 06:00 JST digest
   workflow_dispatch:
   push:
     branches: [main]       # only builds when the commit message contains [build]

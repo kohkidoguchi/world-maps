@@ -88,6 +88,7 @@ MAX_PER_FEED         = 8    # articles fetched per feed（更新の速いフィ�
 FRESH_DAYS           = 3    # この日数より古い記事は候補から外す（毎日配信：新着中心、週末明けも拾える幅）
 MAX_TO_CLAUDE        = 120  # cap sent to Claude（全カテゴリを含める）
 ARTICLES_IN_DIGEST   = 10   # 取り上げるニュース件数（半分の長さの解説＋星の影響度つき）
+PAPERS_IN_DIGEST     = 2    # 重要論文は候補から1〜2本だけ載せる（候補の羅列はしない）
 
 # ── RSS Feeds ──────────────────────────────────────────────────────────────────
 
@@ -979,10 +980,20 @@ def _build_papers_html(res, readings) -> str:
     papers = sm.get("top_papers") or []
     if not papers:
         return ""
-    rd = {str(x.get("id")): x for x in (readings or []) if isinstance(x, dict)}
+    # Claude が選んだ 1〜2 本だけ載せる（候補8本を並べない）
+    picked = []
+    for r in (readings or []):
+        if not isinstance(r, dict):
+            continue
+        key = str(r.get("id", "")).upper().lstrip("P")
+        if key.isdigit() and 1 <= int(key) <= len(papers):
+            picked.append((papers[int(key) - 1], r))
+        if len(picked) >= PAPERS_IN_DIGEST:
+            break
+    if not picked:                       # 返ってこなかった時は上位から
+        picked = [(p, {}) for p in papers[:PAPERS_IN_DIGEST]]
     items = ""
-    for i, p in enumerate(papers, 1):
-        r = rd.get(f"P{i}") or rd.get(str(i)) or {}
+    for p, r in picked:
         title_ja = r.get("title_ja") or p.get("title") or ""
         gist = r.get("gist") or ""
         meta = f"{p.get('field') or ''} · {p.get('source') or ''} · {p.get('institution') or ''}（{p.get('country') or ''}）· {p.get('date','')}"
@@ -1002,7 +1013,7 @@ def _build_papers_html(res, readings) -> str:
     <div style="font-size:11px;font-weight:700;color:#0f766e;letter-spacing:2px;text-transform:uppercase;padding:14px 0 4px;">
       📄 直近の重要論文
     </div>
-    <div style="font-size:11px;color:#888;margin-bottom:4px;">直近30日・分野正規化被引用（FWCI）順・学術誌掲載のみ　<a href="{url}" style="color:#4361ee;text-decoration:none;">研究マップを開く →</a></div>
+    <div style="font-size:11px;color:#888;margin-bottom:4px;">直近30日の候補から、特に重要なものを厳選　<a href="{url}" style="color:#4361ee;text-decoration:none;">研究マップを開く →</a></div>
     {items}
   </div>"""
 
@@ -1120,8 +1131,9 @@ def _build_prompt(articles: list[dict], session_label: str, edition: str, market
       "title_ja": "記事タイトルの日本語訳（意訳可・簡潔に）",
       "impact": <影響度を5段階の整数（1〜5）で。5=世界や社会を大きく動かす重大ニュース、4=重要、3=中程度、2=やや小さい、1=限定的。その出来事が経済・政治・社会に与えるインパクトの大きさで判断する>,
       "unique_point": "この記事のユニークな点・最大のポイントを1文で端的に（要約の前に読者の関心を引く導入）",
-      "what_happened": "【起きたこと】事実だけを書く。誰が・いつ・何を・どれだけ（数字、当事者、決定内容、規模）。解釈・評価・見通しはここに書かない。100〜130字。",
-      "reading": "【読み解き】起きたことの意味を書く。①なぜそうなったか（この出来事を生んだ構造・力学。関連するトレンド解説記事の知見があれば取り込んでよい）、②だから何が変わるのか（誰にどう効いてくるか、次に何が起きうるか）。『権力は腐敗する』式の何にでも当てはまる抽象論は禁止。この出来事に根ざした具体的な洞察にする。130〜170字。"
+      "kind": "event または essay。event＝実際に起きた出来事・発表・決定を報じた記事（大半はこちら）。essay＝特定の日付の出来事ではなく、論考・分析・トレンド解説そのものが中身の記事。",
+      "what_happened": "【kind=event のときのみ・essay では空文字列】事実を、記事から拾えるかぎり具体的に書く。誰が・いつ・どこで・何を決めた／行ったか、金額・数量・期間・比率などの数字、当事者と相手方、決定の中身と発効時期、直前の経緯（前回はどうだったか）。固有名詞と数字を省略しない。解釈・評価・見通しはここに書かない。**180〜260字を必ず満たす**（短く済ませない。記事中の具体的事実で埋める）。",
+      "reading": "【読み解き】kind=event のときは、起きたことの意味を書く。①なぜそうなったか（この出来事を生んだ構造・力学。関連するトレンド解説記事の知見があれば取り込んでよい）、②だから何が変わるのか（誰にどう効いてくるか、次に何が起きうるか）。kind=essay のときは、その論考の中身そのものをここに一本で書く（何を論じ、どんな論拠で、どこが新しいのか／見落とされがちな点は何か）。どちらも『権力は腐敗する』式の何にでも当てはまる抽象論は禁止。event なら130〜170字、essay なら220〜280字。"
     }}
   ],
   "papers": [
@@ -1131,11 +1143,12 @@ def _build_prompt(articles: list[dict], session_label: str, edition: str, market
 }}
 
 配分（厳守）：{slot_summary}
+件種の配分（厳守）：kind=event を8件以上、kind=essay は最大2件。essay の候補が多くても、3件目以降は必ず event の記事に差し替えること。
 ※「国内」は日本国内を指す。
-※同じ出来事・発表を複数のソースが報じている場合は、最も詳細な1件のみ選ぶこと。
-※【時事ニュース優先・重要】取り上げる10件は、最近実際に起きた出来事・発表・動き（＝時事ニュース）を選ぶこと。時系列のない一般論・トレンド解説エッセイを単体で取り上げてはいけない。そうしたトレンド解説記事は、選んだ時事ニュースの背景・構造を説明する材料として summary_ja の②に活用すること。速報の羅列ではなく、構造的な意味を持つ出来事を優先する。もしあるカテゴリのプールに時事性のある記事が乏しい場合は、その中で最も『出来事性』の高いものを選ぶ。
-※【重要論文】提示された論文 [P1]..[Pn] すべてについて、papers 配列に id・title_ja・gist を返すこと（論文が提示されていなければ空配列）。gist は「何を明らかにしたか」と「なぜ重要か」を平易に。
-※【記事は2段構え・厳守】各記事は what_happened（起きたこと＝事実のみ）と reading（読み解き＝意味と含意）を必ず分ける。what_happened に評価・見通しを混ぜない。reading に新しい事実を足さない。自然科学・哲学・芸術の記事も同じ2段構えで書く（what_happened＝その研究や作品が示したこと／reading＝それが何を意味するか）。
+※【重複の禁止・厳守】同じ出来事・発表は、10件の中に1件だけ。複数のソースが報じていれば最も詳細な1件を選ぶ。別角度・別側面でも同じ出来事なら2件にしない（例：首脳会談の合意そのものと、同じ会談を扱う別記事）。選び終えたら10件を見直し、同じ出来事を指しているものが無いか必ず確認すること。
+※【時事ニュース優先・重要】取り上げる10件は、原則として最近実際に起きた出来事・発表・動き（＝時事ニュース）を選ぶこと。トレンド解説記事は、選んだ時事ニュースの背景・構造を説明する材料として reading に活用するのが基本。それ自体が際立って優れた論考で単体で取り上げる価値がある場合に限り essay として選んでよい。**kind=essay は10件中2件まで（厳守）。残り8件以上は必ず event にする。**速報の羅列ではなく、構造的な意味を持つ出来事を優先する。もしあるカテゴリのプールに時事性のある記事が乏しい場合は、その中で最も『出来事性』の高いものを選ぶ。
+※【重要論文・厳守】提示された論文 [P1]..[Pn] のうち、**最も重要な1〜2本だけ**を選び、papers 配列に id・title_ja・gist を返すこと（候補を全部返さない。論文が提示されていなければ空配列）。選ぶ基準は「その分野の理解や実務を実際に動かしうるか」。gist は「何を明らかにしたか」と「なぜ重要か」を平易に。
+※【記事の組み立て・厳守】kind=event（出来事の記事）は what_happened（事実のみ・具体的に）と reading（意味と含意）を分ける。what_happened に評価・見通しを混ぜない。reading に新しい事実を足さない。**kind=essay（論考・分析・トレンド解説そのものが中身の記事）は what_happened を空文字列にし、reading に一本で書く**——essay は全体が解釈なので、事実と解釈に割る意味がない。科学の発見を報じた記事は event（何が示されたかが事実）、哲学・批評・思想の論考は essay。
 ※【地図の見出し翻訳】地政学マップの [G1]..[Gn] すべてについて、geo_titles_ja に id と title_ja（日本語訳）を返すこと（地図データが無ければ空配列）。英語の見出しをそのまま残さない。
 ※【テーマ分散・厳守】10件は互いに異なる主題で構成すること。同一号の中で同じ主題の記事を偏って選ばない（例：AI・生成AIばかり、同じ紛争ばかり、にしない）。同種の候補しかない場合のみ重複を許容する。
 ※「投資家として」「コンサルタントとして」「政治家として」のような、特定の立場に立った示唆・アドバイスは書かないこと。あくまで事象そのものの構造と含意を描くこと。
@@ -1195,18 +1208,21 @@ def build_html(digest: dict, articles: list[dict], session_label: str, market_da
         def block(label: str, text: str, color: str) -> str:
             if not text:
                 return ""
+            head = (f'<div style="font-size:10px;font-weight:700;color:{color};letter-spacing:2px;'
+                    f'margin-bottom:4px;">{label}</div>') if label else ""
             return f"""
           <div style="margin-top:12px;">
-            <div style="font-size:10px;font-weight:700;color:{color};letter-spacing:2px;
-                        margin-bottom:4px;">{label}</div>
+            {head}
             <p style="margin:0;font-size:13px;color:#444;line-height:1.85;white-space:pre-line;">{text}</p>
           </div>"""
 
-        # 「起きたこと」と「読み解き」を分けて示す。旧形式（summary_ja 一本）も壊さない。
-        body_html = (block("起きたこと", item.get("what_happened", ""), "#1a1a2e")
-                     + block("読み解き", item.get("reading", ""), "#4361ee"))
-        if not body_html:
-            body_html = block("", item.get("summary_ja", ""), "#1a1a2e")
+        # 出来事の記事は「起きたこと」と「読み解き」に分ける。論考（essay）は全体が解釈なので
+        # 見出しを付けず一本で出す。旧形式（summary_ja 一本）も壊さない。
+        what, reading = item.get("what_happened", ""), item.get("reading", "")
+        if what:
+            body_html = block("起きたこと", what, "#1a1a2e") + block("読み解き", reading, "#4361ee")
+        else:
+            body_html = block("", reading or item.get("summary_ja", ""), "#1a1a2e")
 
         cards_html += f"""
         <div style="background:white;margin:0 0 20px;border-radius:10px;
@@ -1339,8 +1355,10 @@ def build_tts_script(digest: dict, label: str, headline: str) -> str:
             impact_str = f"影響度は5段階中の{int(impact)}。" if impact else ""
             what = item.get("what_happened", "")
             reading = item.get("reading", "")
-            body = (f"起きたこと。{what} 読み解き。{reading}"
-                    if (what or reading) else item.get("summary_ja", ""))
+            if what:
+                body = f"起きたこと。{what} 読み解き。{reading}"
+            else:                              # 論考は見出しを挟まず一本で読む
+                body = reading or item.get("summary_ja", "")
             parts.append(
                 f"{i}件目。{item.get('title_ja','')}。{impact_str}"
                 f"{item.get('unique_point','')} {body}"
@@ -1349,7 +1367,7 @@ def build_tts_script(digest: dict, label: str, headline: str) -> str:
     papers = digest.get("papers", [])
     if papers:
         parts.append("続いて、直近の重要な論文です。")
-        for pp in papers[:6]:
+        for pp in papers[:PAPERS_IN_DIGEST]:
             if pp.get("title_ja"):
                 parts.append(f"{pp.get('title_ja')}。{pp.get('gist','')}")
 
