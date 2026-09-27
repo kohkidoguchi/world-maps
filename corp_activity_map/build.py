@@ -292,35 +292,57 @@ def _usable_events(raw: dict) -> list[dict]:
             and ((e.get("actor") or {}).get("name") or "").strip()]
 
 
-def extract_events(headlines: list[dict], recent_titles: list[str], run_date: str, attempts: int = 2) -> dict:
+def _need(n_head: int) -> int:
+    """この見出し数なら最低これだけイベントが出るはず、という本数。"""
+    return 1 if n_head < 50 else min(10, max(3, n_head // 50))
+
+
+def extract_events(headlines: list[dict], recent_titles: list[str], run_date: str) -> dict:
     """見出し群から企業活動イベントを抽出する。
-    出力がほぼ空（総評だけ書いて空のイベント1件で終わる退化出力、2026-09-16 に発生）なら1回だけ
-    やり直し、それでも駄目なら例外にして前回の地図データを維持する（空の地図を公開しない）。"""
-    n_head = min(len(headlines), MAX_TO_CLAUDE)
-    need = 1 if n_head < 50 else min(10, max(3, n_head // 50))
-    for attempt in range(1, attempts + 1):
-        raw = _extract_once(headlines, recent_titles, run_date)
-        usable = _usable_events(raw)
-        print(f"  events: {len(raw.get('events') or [])} 件（使える {len(usable)} 件、必要 {need} 件以上）")
-        if len(usable) >= need:
-            raw["events"] = usable
-            return raw
-        print(f"  ! 退化出力 — 再試行 {attempt}/{attempts}")
+
+    1,300件を一度に渡すと、たまに「総評だけ書いて空のイベントで終わる」退化出力になる
+    （09-16, 09-24〜27。数百トークンで end_turn し、何度やり直しても同じ）。同じ条件で
+    再試行しても直らないので、駄目なら見出しを分割して小さい依頼に変える。
+    それでも足りなければ例外にし、前回の地図データを維持する（空の地図を公開しない）。"""
+    pool = headlines[:MAX_TO_CLAUDE]
+    for chunks in (1, 2, 4):
+        if chunks > 1:
+            print(f"  ! 退化出力 — 見出しを{chunks}分割して再試行")
+        size = math.ceil(len(pool) / chunks)
+        batches = [pool[i:i + size] for i in range(0, len(pool), size)]
+        events, notes, ok = [], [], True
+        for bi, batch in enumerate(batches, 1):
+            raw = _extract_once(batch, recent_titles, run_date, share=1 / chunks)
+            usable = _usable_events(raw)
+            print(f"  events[{bi}/{len(batches)}]: {len(raw.get('events') or [])} 件"
+                  f"（使える {len(usable)} 件、必要 {_need(len(batch))} 件以上）")
+            if len(usable) < _need(len(batch)):
+                ok = False
+                break
+            events += usable
+            if raw.get("daily_note_ja"):
+                notes.append(raw["daily_note_ja"])
+        if ok and events:
+            return {"daily_note_ja": " ".join(notes)[:1200], "events": events}
     raise RuntimeError("Claude の出力が退化（イベントがほぼ空）したため中断。前回の地図データを維持します")
 
 
-def _extract_once(headlines: list[dict], recent_titles: list[str], run_date: str) -> dict:
+def _extract_once(headlines: list[dict], recent_titles: list[str], run_date: str, share: float = 1.0) -> dict:
+    """share: この依頼が1日分のうち何割を占めるか（分割時に件数の目安を按分するため）。"""
     import anthropic
 
     client = anthropic.Anthropic()
     lines = "\n".join(f"[{h['i']}] ({h['region']}/{h['source']}) {h['title']}" for h in headlines[:MAX_TO_CLAUDE])
     recent = "\n".join(f"- {t}" for t in recent_titles[:150]) or "（なし）"
+    quota = (f"\n## この依頼で抽出する件数の目安\n{max(5, int(40 * share))}〜{max(10, int(90 * share))}件"
+             f"（これは1日分の見出しを分割した一部です。この中から拾えるものを拾ってください）\n"
+             if share < 1.0 else "")
     user = f"""基準日: {run_date}（直近24時間の見出し）
 
 ## 直近3日に既に地図へ載せた出来事（続報は新展開がある場合のみ）
 {recent}
-
-## 見出し（{min(len(headlines), MAX_TO_CLAUDE)}件）
+{quota}
+## 見出し（{len(headlines[:MAX_TO_CLAUDE])}件）
 {lines}
 """
     kwargs = dict(
