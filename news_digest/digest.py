@@ -835,10 +835,12 @@ def _build_maps_html(maps: dict, reading: str, geo_titles_ja: list | None = None
 # ── Nowcast（資産クラス別の評価額変動）と重要論文（world-maps / GitHub Pages）────────
 
 def fetch_side_summaries() -> dict:
-    """capital（Nowcast: summary.json + sheet.png）と research（重要論文: summary.json）を取得。"""
+    """research（重要論文: summary.json）を取得。
+    capital（統計期末からの累積 Nowcast）は 2026-09-29 に本紙から外した——冒頭の定点観測が
+    その日の変化を見せる役割を担い、末尾の累積表は読まれていなかったため。"""
     import requests as _req
     out = {}
-    for k, png_name in (("capital", "sheet.png"), ("research", None)):
+    for k, png_name in (("research", None),):
         try:
             r = _req.get(f"{MAPS_BASE_URL}/{k}/summary.json", timeout=20)
             r.raise_for_status()
@@ -856,50 +858,6 @@ def fetch_side_summaries() -> dict:
             print(f"  [WARN] {k} summary: {e}")
     return out
 
-def _pct(v, d=1):
-    return "–" if v is None else f"{v*100:+.{d}f}%"
-
-def _bn(v):
-    """USD 10億 → 兆ドル/億ドル表記"""
-    if v is None:
-        return "–"
-    if abs(v) >= 1000:
-        return f"{v/1000:+.2f}兆ドル"
-    return f"{v*10:+,.0f}億ドル"
-
-def _format_nowcast_for_prompt(cap) -> str:
-    nc = (cap or {}).get("summary") or {}
-    if not nc or not nc.get("indices"):
-        return ""
-    names = nc.get("region_names", {})
-    lines = ["\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-             f"【資産クラス別の評価額変動 Nowcast — 統計時点 {nc.get('stat_period_ja','')}末（{nc.get('from','')}）以降の値動き、保有主体＝全部門】",
-             "■ 地域別の価格の動き（統計時点末→直近）"]
-    for r in nc["indices"]:
-        idx = "・".join(f"{i.get('label')} {i.get('level'):,.0f}({str(i.get('date',''))[5:]})"
-                        for i in r.get("indices", []) if i.get("level"))
-        y = r.get("yield10_level"); dy = r.get("yield10_chg_pp") or 0
-        ystr = f"10年利回り {y:.2f}%（{'+' if dy >= 0 else ''}{dy*100:.0f}bp）" if y is not None else "利回り –"
-        hp = f"；住宅 {_pct(r.get('hpi_since_stat'))}" if r.get("hpi_since_stat") is not None else ""
-        lines.append(f"  - {r.get('name')}: 株価 {_pct(r.get('eq_since_stat'))}（年初来 {_pct(r.get('eq_ytd'))}／12か月 {_pct(r.get('eq_12m'))}）{idx}；{ystr}；対ドル {_pct(r.get('fx_vs_usd_since_stat'))}{hp}")
-    g = nc.get("gold")
-    if g:
-        lines.append(f"  - 金: {g.get('level'):,.0f}ドル/oz（統計後 {_pct(g.get('since_stat'))}、年初来 {_pct(g.get('ytd'))}）")
-    be = nc.get("bond_etf") or {}; re_ = nc.get("reit_etf") or {}
-    lines.append(f"  - 米債券ETF {_pct(be.get('since_stat'))}／米REIT {_pct(re_.get('since_stat'))}（統計後）")
-    lines.append("■ 資産クラス別の評価変動（統計残高 × 値動き、USD、全部門）")
-    for c, v in (nc.get("valuation") or {}).items():
-        cells = "、".join(f"{names.get(r, r)} {_bn(x.get('usd_bn'))}({_pct(x.get('pct'))})"
-                          for r, x in (v.get("by_region") or {}).items())
-        lines.append(f"  - {v.get('label')}: {cells}")
-    tot = nc.get("totals") or {}
-    lines.append("  - 合計: " + "、".join(f"{names.get(r, r)} {_bn(x.get('usd_bn'))}({_pct(x.get('pct'))})" for r, x in tot.items()))
-    fx = nc.get("fx_effect") or {}
-    lines.append("  - 参考・為替による期首残高のドル換算変化: " + "、".join(f"{names.get(r, r)} {_pct(x.get('pct'))}" for r, x in fx.items() if x))
-    lines.append("（前提: " + (nc.get("assumptions") or "")[:160] + "）")
-    lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-    return "\n".join(lines)
-
 def _format_papers_for_prompt(res) -> str:
     sm = (res or {}).get("summary") or {}
     papers = sm.get("top_papers") or []
@@ -911,69 +869,6 @@ def _format_papers_for_prompt(res) -> str:
         lines.append(f"  [P{i}] {p.get('title')}｜{p.get('field')}／{p.get('topic')}｜{p.get('source')}｜{p.get('first_author')}（{p.get('institution')}, {p.get('country')}）｜{p.get('date')}｜FWCI {p.get('fwci')}・被引用 {p.get('cited')}")
     lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
     return "\n".join(lines)
-
-def _pcell(v):
-    if v is None:
-        return '<td style="text-align:right;color:#9ca3af;">–</td>'
-    col = "#6b4fa0" if v >= 0 else "#b5651d"
-    return f'<td style="text-align:right;color:{col};font-weight:600;white-space:nowrap;">{_pct(v)}</td>'
-
-def _build_nowcast_html(cap, reading: str) -> str:
-    nc = (cap or {}).get("summary") or {}
-    if not nc or not nc.get("indices"):
-        return ""
-    url = cap.get("url", "#")
-    img = ""
-    if cap.get("png"):
-        img = (f'<a href="{url}"><img src="cid:sheet_capital" alt="評価額変動のNowcast" '
-               f'style="width:100%;display:block;border-radius:6px;border:1px solid #e5e7eb;"></a>')
-    tot = nc.get("totals") or {}
-    dash = '<td style="text-align:right;color:#9ca3af;">–</td>'
-    rows = ""
-    for r in nc["indices"]:
-        rid = r.get("region"); t = tot.get(rid) or {}
-        y = r.get("yield10_level"); dy = r.get("yield10_chg_pp") or 0
-        if y is not None:
-            ycol = "#b5651d" if dy > 0 else "#6b4fa0"
-            ystr = f"{y:.2f}% <span style='color:{ycol};font-size:10px;'>{'+' if dy >= 0 else ''}{dy*100:.0f}bp</span>"
-        else:
-            ystr = "–"
-        if t:
-            tcol = "#6b4fa0" if (t.get("usd_bn") or 0) >= 0 else "#b5651d"
-            tstr = f"<span style='color:{tcol};'>{_bn(t.get('usd_bn'))}</span> <span style='color:#888;font-size:10px;'>({_pct(t.get('pct'))})</span>"
-        else:
-            tstr = "–"
-        fxcell = dash if rid == "USA" else _pcell(r.get("fx_vs_usd_since_stat"))
-        rows += (f'<tr style="border-bottom:1px solid #f1f5f9;">'
-                 f'<td style="padding:6px 8px;font-weight:600;color:#1a1a2e;">{r.get("name")}</td>'
-                 f'{_pcell(r.get("eq_since_stat"))}{_pcell(r.get("eq_ytd"))}'
-                 f'<td style="text-align:right;white-space:nowrap;">{ystr}</td>{fxcell}'
-                 f'<td style="text-align:right;white-space:nowrap;">{tstr}</td></tr>')
-    g = nc.get("gold") or {}
-    gold_row = ""
-    if g:
-        gold_row = (f'<tr><td style="padding:6px 8px;color:#666;">金（USD/oz）</td>{_pcell(g.get("since_stat"))}{_pcell(g.get("ytd"))}'
-                    f'<td colspan="3" style="text-align:right;color:#888;font-size:11px;">{g.get("level"):,.0f}ドル（{g.get("date","")}）</td></tr>')
-    table = f"""
-      <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:10px;">
-        <thead><tr style="color:#7c86b5;font-size:10px;letter-spacing:1px;">
-          <th style="text-align:left;padding:4px 8px;">地域</th><th>株価 統計後</th><th>年初来</th><th>10年利回り</th><th>対ドル</th><th>評価変動 合計</th>
-        </tr></thead>
-        <tbody>{rows}{gold_row}</tbody>
-      </table>
-      <div style="font-size:10px;color:#9ca3af;margin-top:6px;">統計時点＝{nc.get('stat_period_ja','')}末。評価変動＝統計残高（全部門）×その後の値動き、取引は含まない。上昇＝紫、下落・金利上昇＝橙。</div>"""
-    reading_html = f'<p style="margin:12px 0 0;font-size:13px;color:#333;line-height:1.9;white-space:pre-line;">{reading}</p>' if reading else ""
-    return f"""
-  <div style="background:white;margin:8px 0 20px;border-radius:10px;padding:18px 24px;
-              box-shadow:0 1px 5px rgba(0,0,0,0.07);border-left:4px solid #6b4fa0;">
-    <div style="font-size:10px;font-weight:700;color:#6b4fa0;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;">
-      参考 ── 統計期末からの累積評価変動 Nowcast
-    </div>
-    <div style="font-size:11px;color:#888;margin-bottom:10px;">資金循環統計（{nc.get('stat_period_ja','')}末）の残高 × その後の株価・金利・為替の累積。週2回更新。日々の変化は冒頭の定点観測を参照　<a href="{url}" style="color:#4361ee;text-decoration:none;">対話版を開く →</a></div>
-    {img}
-    {table}
-    {reading_html}
-  </div>"""
 
 def _build_papers_html(res, readings) -> str:
     sm = (res or {}).get("summary") or {}
@@ -1031,7 +926,6 @@ def _build_prompt(articles: list[dict], session_label: str, edition: str, market
 
     market_block = _format_market_for_prompt(market_data)
     maps_block = _format_maps_for_prompt(maps or {})
-    nowcast_block = _format_nowcast_for_prompt((side or {}).get('capital'))
     papers_block  = _format_papers_for_prompt((side or {}).get('research'))
 
     if edition == "morning":
@@ -1098,7 +992,7 @@ def _build_prompt(articles: list[dict], session_label: str, edition: str, market
 
 ※ 上記は実データ。前日比は直近の終値とその前営業日の比較（各市場の最新営業日。米国市場は日本時間の早朝に引けた分）。1ヶ月・1年は1ヶ月前・1年前との比較。
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-{recent_block}{nowcast_block}{maps_block}{papers_block}
+{recent_block}{maps_block}{papers_block}
 以下は{session_label}に取得した記事一覧です。カテゴリ別に整理しています。
 
 {category_sections}
@@ -1119,7 +1013,6 @@ def _build_prompt(articles: list[dict], session_label: str, edition: str, market
 
 {{
   "indicators_analysis": "{indicators_instruction}",
-  "nowcast_reading": "（Nowcastデータが提示されている場合のみ）統計時点末から直近までの累積で『誰の富が、どの資産で、どれだけ増減したか』を2〜3文で。評価変動の合計で見て資産が増えた地域・減った地域と、その主因となった資産クラスだけを言う。今日の記事との関連づけは不要（それは indicators_analysis の役目）。文体ルールに従い、金額は兆ドル・億ドルで丸めて言う。データが無ければ空文字列。",
   "geo_titles_ja": [
     {{"id": "G1", "title_ja": "[G1]の見出しの日本語訳（40字以内。固有名詞は日本語の通称に。報道見出しとして自然な日本語にする）"}}
   ],
@@ -1179,10 +1072,9 @@ def build_html(digest: dict, articles: list[dict], session_label: str, market_da
     now_str = datetime.now().strftime("%Y年%m月%d日 %H:%M")
     article_map = {i + 1: a for i, a in enumerate(articles)}
 
-    # 冒頭＝定点観測（その日の変化＋なぜ動いたか）。統計期末からの累積 Nowcast は末尾の参考欄へ。
+    # 冒頭＝定点観測（その日の変化＋なぜ動いたか）。統計期末からの累積 Nowcast は 2026-09-29 に廃止。
     side = side or {}
     indicators_panel = _build_indicators_html(market_data, digest.get("indicators_analysis", ""))
-    nowcast_panel = _build_nowcast_html(side.get("capital"), digest.get("nowcast_reading", ""))
     maps_panel = _build_maps_html(maps or {}, digest.get("maps_reading", ""), digest.get("geo_titles_ja", []))
     papers_panel = _build_papers_html(side.get("research"), digest.get("papers", []))
 
@@ -1284,9 +1176,6 @@ def build_html(digest: dict, articles: list[dict], session_label: str, market_da
   <!-- 直近の重要論文 -->
   {papers_panel}
 
-  <!-- 参考: 統計期末からの累積評価変動 Nowcast（週2回更新） -->
-  {nowcast_panel}
-
   <!-- Reply invitation -->
   <div style="background:#1a1a2e;color:#e2e6f3;padding:18px 24px;border-radius:10px;margin:4px 0 20px;">
     <div style="font-size:12px;font-weight:700;letter-spacing:1px;margin-bottom:6px;color:#7c86b5;">
@@ -1370,10 +1259,6 @@ def build_tts_script(digest: dict, label: str, headline: str) -> str:
         for pp in papers[:PAPERS_IN_DIGEST]:
             if pp.get("title_ja"):
                 parts.append(f"{pp.get('title_ja')}。{pp.get('gist','')}")
-
-    nowcast = digest.get("nowcast_reading", "")
-    if nowcast:
-        parts.append("最後に参考として、統計期末からの累積で見た資産の評価額の変化です。" + nowcast)
 
     parts.append("以上、本日のダイジェストでした。")
     return _clean_for_tts("\n\n".join(parts))
@@ -1517,8 +1402,6 @@ def run_digest(edition: str, force: bool = False):
         for cid, field in ((f"map_{k}", "png"), (f"map_{k}_w", "png_w"), (f"map_{k}_e", "png_e")):
             if m.get(field):
                 inline_images.append((cid, m[field]))
-    if side.get("capital", {}).get("png"):
-        inline_images.append(("sheet_capital", side["capital"]["png"]))
     if DRY_RUN:
         out = Path(os.environ.get("DIGEST_PREVIEW", "digest_preview.html"))
         out.write_text(html, encoding="utf-8")
