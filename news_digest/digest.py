@@ -449,7 +449,21 @@ def fetch_market_data() -> dict:
         closes = res["indicators"]["quote"][0]["close"]
         stamps = res.get("timestamp") or [0] * len(closes)
         pairs = [(c, t) for c, t in zip(closes, stamps) if c is not None]
-        return [c for c, _ in pairs], [t for _, t in pairs]
+        closes = [c for c, _ in pairs]
+        stamps = [t for _, t in pairs]
+        # 当日のバーがまだ形成中で、しかも直前の営業日のバーがまだ配信されていないことがある
+        # （2026-10-01 朝のブレント：9/30 の確定値が未配信で 9/29 と 10/1 が並び、
+        #   「10/1 の値 × 9/29 比」という、表示値と％が噛み合わない行になっていた）。
+        # その場合は形成中のバーを捨て、確定したバーだけで計算する。
+        if len(closes) >= 3:
+            d_last = datetime.fromtimestamp(stamps[-1], JST).date()
+            d_prev = datetime.fromtimestamp(stamps[-2], JST).date()
+            skipped = any((d_prev + timedelta(days=i)).weekday() < 5
+                          for i in range(1, (d_last - d_prev).days))
+            if d_last >= datetime.now(JST).date() and skipped:
+                print(f"  [info] {ticker}: {d_prev}→{d_last} に平日の欠けがあるため、形成中の{d_last}を除外")
+                closes, stamps = closes[:-1], stamps[:-1]
+        return closes, stamps
 
     data = {}
     for sym, name, unit, category, change_mode in MARKET_SPECS:
