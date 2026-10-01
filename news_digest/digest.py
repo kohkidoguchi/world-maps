@@ -473,8 +473,14 @@ def fetch_market_data() -> dict:
                 d = datetime.fromtimestamp(ts, JST)
                 return f"{d.month}/{d.day}" if ts else ""
             asof, asof_prev = _md(stamps[-1]), _md(stamps[-2])
-            m1 = closes[-22] if len(closes) > 22 else closes[0]
-            y1 = closes[-252] if len(closes) > 252 else closes[0]
+            # 1ヶ月前・1年前は「本数」ではなく「日付」で選ぶ。本数で数えると、取引日数が
+            # 市場ごとに違うため期間がずれる（24時間取引のビットコインは252本前＝約8ヶ月前、
+            # 休日の多い日本株は252本前＝約13ヶ月前になっていた）。
+            def _back(days: int) -> float:
+                cutoff = datetime.fromtimestamp(stamps[-1], JST) - timedelta(days=days)
+                older = [c for c, t in zip(closes, stamps) if datetime.fromtimestamp(t, JST) <= cutoff]
+                return older[-1] if older else closes[0]
+            m1, y1 = _back(30), _back(365)
 
             if change_mode == "pp":
                 ch_1d = round(current - prev, 2)
