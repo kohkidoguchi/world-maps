@@ -239,7 +239,7 @@
       <div class="meta"><b>${e.actor.name_ja || e.actor.name}</b> <span>${e.actor.name}</span>・${cname(e.actor.country)}・${e.actor.sector}${e.counterparty.name ? `　→　<b>${e.counterparty.name}</b>${e.counterparty.country ? `（${cname(e.counterparty.country)}）` : ""}` : ""}<br>
         ${D.action_labels[e.action_type]}・${e.theme}・${e.date}${e.is_followup ? "・続報" : ""}</div>
       <p>${e.summary_ja}</p>
-      <div class="why"><b>将来影響 ${"★".repeat(e.impact.score)}${"☆".repeat(5 - e.impact.score)}</b>（${e.impact.scope}・${e.impact.horizon}）　${e.impact.rationale_ja}</div>
+      <div class="why"><b>将来影響 ${"★".repeat(e.impact.score)}${"☆".repeat(5 - e.impact.score)}</b>（${e.impact.scope}・${e.impact.horizon}）　${e.impact.rationale_ja || ""}</div>
       <ul>${e.sources.map(s => `<li><a href="${s.link}" target="_blank" rel="noopener">${s.title}</a> <span style="color:var(--muted)">${s.source}</span></li>`).join("")}</ul>
     </div>
     <div><table class="wtable">

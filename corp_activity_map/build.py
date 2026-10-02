@@ -54,7 +54,8 @@ except ImportError:
 MODEL = "claude-sonnet-5"
 DAYS_IN_WEB = 30          # web/data.json に入れる日数
 MAX_PER_FEED = 40         # 1フィードあたりの見出し上限
-MAX_TO_CLAUDE = 1300      # Claude に渡す見出し上限（約35フィード×40件）
+MAX_TO_CLAUDE = 600       # Claude に渡す見出し上限（トークン削減のため 1300 から縮小）
+TARGET_EVENTS = (25, 45)  # 1日に抽出するイベント数の目安（出力トークンはほぼ件数に比例する）
 UA = {"User-Agent": "CorpActivityMap/1.0 (personal research)"}
 
 # ── 収集する検索フィード ────────────────────────────────────────────────────────
@@ -198,10 +199,10 @@ EVENT_SCHEMA = {
                 "properties": {
                     **LENS_FIELDS,
                     "title_ja": {"type": "string", "description": "日本語の短い見出し（30字以内）"},
-                    "summary_ja": {"type": "string", "description": "何が起きたか＋なぜ構造的に重要か、2〜3文"},
+                    "summary_ja": {"type": "string", "description": "何が起きたか＋なぜ重要かを1文で（60字以内）"},
                     "actor": {
                         "type": "object", "additionalProperties": False,
-                        "required": ["name", "name_ja", "country", "sector", "scale_tier", "scale_note"],
+                        "required": ["name", "name_ja", "country", "sector", "scale_tier"],
                         "properties": {
                             "name": {"type": "string", "description": "主体（企業・ファンド・国営企業）の英語名"},
                             "name_ja": {"type": "string"},
@@ -209,7 +210,6 @@ EVENT_SCHEMA = {
                             "sector": {"type": "string", "description": "業種（日本語・短く）"},
                             "scale_tier": {"type": "integer", "enum": [1, 2, 3, 4, 5],
                                            "description": "主体の大きさ。年間売上（または運用資産）で 1:<10億ドル 2:10〜100億 3:100〜500億 4:500〜2000億 5:>2000億ドル"},
-                            "scale_note": {"type": "string", "description": "根拠（例: 売上約30兆円、時価総額3兆ドル）"},
                         },
                     },
                     "counterparty": {
@@ -245,13 +245,12 @@ EVENT_SCHEMA = {
                     "amount_text": {"type": "string", "description": "元の表記（例: 400億円、$2.6bn）。不明なら空文字"},
                     "impact": {
                         "type": "object", "additionalProperties": False,
-                        "required": ["score", "horizon", "scope", "rationale_ja"],
+                        "required": ["score", "horizon", "scope"],
                         "properties": {
                             "score": {"type": "integer", "enum": [1, 2, 3, 4, 5],
                                       "description": "将来に与える影響。1=一過性・局所 3=国レベルで産業構造に影響 5=世界の産業・技術・地政学の構造を変えうる。不可逆性・波及範囲・時間軸で判断"},
                             "horizon": {"type": "string", "enum": ["短期", "中期", "長期"]},
                             "scope": {"type": "string", "enum": ["地域", "国", "世界"]},
-                            "rationale_ja": {"type": "string", "description": "影響度の根拠を1文で"},
                         },
                     },
                     "sources": {"type": "array", "items": {"type": "integer"}, "description": "根拠にした見出し番号（複数可）"},
@@ -276,8 +275,8 @@ SYSTEM_PROMPT = """あなたは世界の企業活動を観測するアナリス�
 - scale_tier は主体の年間売上（金融なら運用資産）の桁で判定。impact.score は構造的な重要性で判定し、
   金額の大小に引きずられない（小さくても不可逆・波及の大きいものは高く、巨額でも金融的な入れ替えに過ぎないものは低く）。
 - 「投資家として」等の立場に立った助言は書かない。事象の構造と含意だけを書く。
-- 件数の目安は 40〜90 件。重要度の低い小型案件は無理に拾わない。ただし世界の分布を偏らせないよう、
-  米国以外（日本・欧州・中国・インド・中東・アフリカ・中南米）の案件は小型でも拾う。
+- 件数の目安は 25〜45 件。重要なものだけを厳選し、小型・一過性の案件は拾わない。ただし世界の分布を
+  偏らせないよう、米国以外（日本・欧州・中国・インド・中東・アフリカ・中南米）の案件は優先的に残す。
 - 直近数日に地図に載った出来事（別途渡す）の続報は、新しい展開が無ければ拾わない。新展開があれば is_followup=true で載せる。
 - 金額以外の軸（signal / materiality / stage / tags / revenue_usd）は「主要媒体の一面はなぜそれを選ぶか」を基準に付ける。
   一面は金額ではなく、より大きな問いの証拠（シグナル）、国家と企業の接点、先例性、人への影響、能力の変化で選ぶ。
@@ -294,19 +293,19 @@ def _usable_events(raw: dict) -> list[dict]:
 
 def _need(n_head: int) -> int:
     """この見出し数なら最低これだけイベントが出るはず、という本数。"""
-    return 1 if n_head < 50 else min(10, max(3, n_head // 50))
+    return 1 if n_head < 50 else min(6, max(3, n_head // 100))
 
 
 def extract_events(headlines: list[dict], recent_titles: list[str], run_date: str) -> dict:
     """見出し群から企業活動イベントを抽出する。
 
-    1,300件を一度に渡すと、たまに「総評だけ書いて空のイベントで終わる」退化出力になる
-    （09-16, 09-24〜27。数百トークンで end_turn し、何度やり直しても同じ）。同じ条件で
-    再試行しても直らないので、駄目なら見出しを分割して小さい依頼に変える。
-    それでも足りなければ例外にし、前回の地図データを維持する（空の地図を公開しない）。"""
+    見出しをまとめて渡すと、たまに「総評だけ書いて空のイベントで終わる」退化出力になる
+    （09-16, 09-24〜27, 10-02。数百トークンで end_turn し、同じ条件で再試行しても直らない）。
+    10-02 は 72,000 トークン投げて 543 トークンで終わる無駄打ちが出たので、**最初から2分割**で
+    小さく投げる。それでも足りなければ4分割、最後は例外にして前回の地図データを維持する。"""
     pool = headlines[:MAX_TO_CLAUDE]
-    for chunks in (1, 2, 4):
-        if chunks > 1:
+    for chunks in (2, 4):
+        if chunks > 2:
             print(f"  ! 退化出力 — 見出しを{chunks}分割して再試行")
         size = math.ceil(len(pool) / chunks)
         batches = [pool[i:i + size] for i in range(0, len(pool), size)]
@@ -334,8 +333,9 @@ def _extract_once(headlines: list[dict], recent_titles: list[str], run_date: str
     client = anthropic.Anthropic()
     lines = "\n".join(f"[{h['i']}] ({h['region']}/{h['source']}) {h['title']}" for h in headlines[:MAX_TO_CLAUDE])
     recent = "\n".join(f"- {t}" for t in recent_titles[:150]) or "（なし）"
-    quota = (f"\n## この依頼で抽出する件数の目安\n{max(5, int(40 * share))}〜{max(10, int(90 * share))}件"
-             f"（これは1日分の見出しを分割した一部です。この中から拾えるものを拾ってください）\n"
+    lo, hi = TARGET_EVENTS
+    quota = (f"\n## この依頼で抽出する件数の目安\n{max(4, round(lo * share))}〜{max(8, round(hi * share))}件"
+             f"（これは1日分の見出しを分割した一部です。この中から重要なものだけを拾ってください）\n"
              if share < 1.0 else "")
     user = f"""基準日: {run_date}（直近24時間の見出し）
 
@@ -550,8 +550,8 @@ def enrich_day(run_date: str) -> None:
         print(f"  {run_date}: 追記済み"); return
     client = anthropic.Anthropic()
     lines = "\n".join(
-        f"[{e['id']}] {e['actor']['name']}（{e['actor']['scale_note']}）｜{ACTION_LABELS[e['action_type']]}｜{e['title_ja']}｜{e['summary_ja']}"
-        f"｜金額 {e['amount_text'] or e['amount_usd'] or '不明'}｜影響{e['impact']['score']}: {e['impact']['rationale_ja']}" for e in todo)
+        f"[{e['id']}] {e['actor']['name']}（規模{e['actor']['scale_tier']}）｜{ACTION_LABELS[e['action_type']]}｜{e['title_ja']}｜{e['summary_ja']}"
+        f"｜金額 {e['amount_text'] or e['amount_usd'] or '不明'}｜影響{e['impact']['score']}" for e in todo)
     user = f"""次の企業活動イベント（{run_date}）それぞれに、一面レンズ用のフィールドを付けてください。id は必ずそのまま返すこと。
 
 {lines}"""
