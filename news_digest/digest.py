@@ -790,16 +790,10 @@ def _format_maps_for_prompt(maps: dict) -> str:
     lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
     return "\n".join(lines)
 
-def _build_maps_html(maps: dict, reading: str, geo_titles_ja: list | None = None) -> str:
+def _build_maps_html(maps: dict, reading: str) -> str:
+    """地図パネル。要約の箇条書きは置かない——地図の下には、出来事のニュース本体が続く。"""
     if not maps:
         return ""
-    # 地政学マップの見出しはGDELTの英語原文なので、Claudeが返した日本語訳に差し替える
-    ja = {}
-    for x in (geo_titles_ja or []):
-        if isinstance(x, dict) and x.get("title_ja"):
-            key = str(x.get("id", "")).upper().lstrip("G")
-            if key.isdigit():
-                ja[int(key)] = x["title_ja"]
     cards = ""
     for k in DIGEST_MAPS:
         m = maps.get(k)
@@ -822,14 +816,6 @@ def _build_maps_html(maps: dict, reading: str, geo_titles_ja: list | None = None
                 f'<div style="font-size:10px;color:#9ca3af;margin:-2px 0 8px;">{label}</div>'
                 for side, label in (("w", "南北アメリカ〜欧州・アフリカ"), ("e", "欧州〜アジア・太平洋")))
             img += f'<div class="narrow" style="display:none;max-height:0;overflow:hidden;">{halves}</div>'
-        raw = sm.get("top_events", [])
-        if k == "geo":
-            titles = [ja.get(i) or str(e.get("title") or "").strip() for i, e in enumerate(raw, 1)]
-        else:
-            titles = [str(e.get("title") or "").strip() for e in raw]
-        titles = [t for t in titles if t][:3]
-        tops = "".join(f'<li style="margin:2px 0;">{htmllib.escape(t)}</li>' for t in titles)
-        ul = f'<ul style="margin:8px 0 4px;padding-left:18px;font-size:12px;color:#555;line-height:1.6;">{tops}</ul>' if tops else ""
         cards += f"""
         <div style="margin:0 0 14px;">
           <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
@@ -837,7 +823,6 @@ def _build_maps_html(maps: dict, reading: str, geo_titles_ja: list | None = None
             <span style="font-size:10px;color:#9ca3af;">{gen}</span>
           </div>
           {img}
-          {ul}
           <a href="{url}" style="font-size:12px;color:#4361ee;text-decoration:none;">対話地図を開く →</a>
         </div>"""
     reading_html = ""
@@ -1033,9 +1018,6 @@ def _build_prompt(articles: list[dict], session_label: str, edition: str, market
 
 {{
   "indicators_analysis": "{indicators_instruction}",
-  "geo_titles_ja": [
-    {{"id": "G1", "title_ja": "[G1]の見出しの日本語訳（40字以内。固有名詞は日本語の通称に。報道見出しとして自然な日本語にする）"}}
-  ],
   "maps_reading": "（地図データが提示されている場合のみ）2枚の世界地図が今日示していることを4〜6文で読む。①地政学マップ：世界のどこに注目が集中し、どんな種類の出来事（衝突・協調・制裁など）が動いているか。②企業活動マップ：資本や投資がどこへ向かい、どの産業・国が主役か。③その2つと、上の定点観測・今日の記事10件との関係——地図が記事を裏づけているか、記事に出ていない動きが地図に見えるか。文体ルールに従い、耳で聞いて分かる平易な言葉で。地図データが無ければ空文字列。",
   "articles": [
     {{
@@ -1045,8 +1027,9 @@ def _build_prompt(articles: list[dict], session_label: str, edition: str, market
       "impact": <影響度を5段階の整数（1〜5）で。5=世界や社会を大きく動かす重大ニュース、4=重要、3=中程度、2=やや小さい、1=限定的。その出来事が経済・政治・社会に与えるインパクトの大きさで判断する>,
       "unique_point": "この記事のユニークな点・最大のポイントを1文で端的に（要約の前に読者の関心を引く導入）",
       "kind": "event または essay。event＝実際に起きた出来事・発表・決定を報じた記事（大半はこちら）。essay＝特定の日付の出来事ではなく、論考・分析・トレンド解説そのものが中身の記事。",
-      "what_happened": "【kind=event のときのみ・essay では空文字列】事実を、記事から拾えるかぎり具体的に書く。誰が・いつ・どこで・何を決めた／行ったか、金額・数量・期間・比率などの数字、当事者と相手方、決定の中身と発効時期、直前の経緯（前回はどうだったか）。固有名詞と数字を省略しない。解釈・評価・見通しはここに書かない。**180〜260字を必ず満たす**（短く済ませない。記事中の具体的事実で埋める）。",
-      "reading": "【読み解き】kind=event のときは、起きたことの意味を書く。①なぜそうなったか（この出来事を生んだ構造・力学。関連するトレンド解説記事の知見があれば取り込んでよい）、②だから何が変わるのか（誰にどう効いてくるか、次に何が起きうるか）。kind=essay のときは、その論考の中身そのものをここに一本で書く（何を論じ、どんな論拠で、どこが新しいのか／見落とされがちな点は何か）。どちらも『権力は腐敗する』式の何にでも当てはまる抽象論は禁止。event なら130〜170字、essay なら220〜280字。"
+      "structure": "【kind=event のときのみ・essay では空文字列】**この出来事を生んだ構造的な原因**を書く。水面下で以前から働いている力（制度・力関係・経済条件・技術や人口の変化・積み上がってきた矛盾）を名指しし、それがどこまで来ていたのかを示す。ここでは今回の出来事そのものをまだ描かない——「その土壌がどうできていたか」だけを書く。130〜170字。",
+      "surface": "【kind=event のときのみ・essay では空文字列】**その構造が今回どう表面に出たか**を、事実で具体的に書く。『ゆえに〜という形で表れた』と受けられる書き出しにし、誰が・いつ・どこで・何を決めた／行ったか、金額・数量・期間・比率などの数字、当事者と相手方、決定の中身と発効時期、直前の経緯を入れる。固有名詞と数字を省略しない。評価や見通しは書かない。**180〜260字を必ず満たす**。",
+      "reading": "【kind=essay のときのみ・event では空文字列】その論考の中身を一本で書く。何を論じ、どんな論拠で、どこが新しいのか（または見落とされがちな点は何か）。今日の出来事群を俯瞰した解釈として読めるようにする。『権力は腐敗する』式の何にでも当てはまる抽象論は禁止。220〜280字。"
     }}
   ],
   "papers": [
@@ -1061,8 +1044,8 @@ def _build_prompt(articles: list[dict], session_label: str, edition: str, market
 ※【重複の禁止・厳守】同じ出来事・発表は、10件の中に1件だけ。複数のソースが報じていれば最も詳細な1件を選ぶ。別角度・別側面でも同じ出来事なら2件にしない（例：首脳会談の合意そのものと、同じ会談を扱う別記事）。選び終えたら10件を見直し、同じ出来事を指しているものが無いか必ず確認すること。
 ※【時事ニュース優先・重要】取り上げる10件は、原則として最近実際に起きた出来事・発表・動き（＝時事ニュース）を選ぶこと。トレンド解説記事は、選んだ時事ニュースの背景・構造を説明する材料として reading に活用するのが基本。それ自体が際立って優れた論考で単体で取り上げる価値がある場合に限り essay として選んでよい。**kind=essay は10件中2件まで（厳守）。残り8件以上は必ず event にする。**速報の羅列ではなく、構造的な意味を持つ出来事を優先する。もしあるカテゴリのプールに時事性のある記事が乏しい場合は、その中で最も『出来事性』の高いものを選ぶ。
 ※【重要論文・厳守】提示された論文 [P1]..[Pn] のうち、**最も重要な1〜2本だけ**を選び、papers 配列に id・title_ja・gist を返すこと（候補を全部返さない。論文が提示されていなければ空配列）。選ぶ基準は「その分野の理解や実務を実際に動かしうるか」。gist は「何を明らかにしたか」と「なぜ重要か」を平易に。
-※【記事の組み立て・厳守】kind=event（出来事の記事）は what_happened（事実のみ・具体的に）と reading（意味と含意）を分ける。what_happened に評価・見通しを混ぜない。reading に新しい事実を足さない。**kind=essay（論考・分析・トレンド解説そのものが中身の記事）は what_happened を空文字列にし、reading に一本で書く**——essay は全体が解釈なので、事実と解釈に割る意味がない。科学の発見を報じた記事は event（何が示されたかが事実）、哲学・批評・思想の論考は essay。
-※【地図の見出し翻訳】地政学マップの [G1]..[Gn] すべてについて、geo_titles_ja に id と title_ja（日本語訳）を返すこと（地図データが無ければ空配列）。英語の見出しをそのまま残さない。
+※【記事の組み立て・厳守】kind=event は **structure（構造的原因）→ surface（その表出としての出来事）** の2段で書き、reading は空文字列にする。読者は structure を読んでから surface を読むので、surface だけを読んでも意味が通る必要はない代わりに、structure → surface が「こういう土壌があった、ゆえにこの形で表に出た」と一本の線でつながっていること。structure に今回の出来事の詳細を書かない／surface に評価・見通しを書かない。
+※【kind=essay】structure と surface を空文字列にし、reading に一本で書く——essay は全体が解釈なので、事実と解釈に割る意味がない。essay は「個々の出来事を俯瞰して解釈したもの」として置かれる。科学の発見を報じた記事は event（構造＝その分野で積み上がっていた問い／表出＝今回示された結果）、哲学・批評・思想の論考は essay。
 ※【テーマ分散・厳守】10件は互いに異なる主題で構成すること。同一号の中で同じ主題の記事を偏って選ばない（例：AI・生成AIばかり、同じ紛争ばかり、にしない）。同種の候補しかない場合のみ重複を許容する。
 ※「投資家として」「コンサルタントとして」「政治家として」のような、特定の立場に立った示唆・アドバイスは書かないこと。あくまで事象そのものの構造と含意を描くこと。
 """
@@ -1095,7 +1078,7 @@ def build_html(digest: dict, articles: list[dict], session_label: str, market_da
     # 冒頭＝定点観測（その日の変化＋なぜ動いたか）。統計期末からの累積 Nowcast は 2026-09-29 に廃止。
     side = side or {}
     indicators_panel = _build_indicators_html(market_data, digest.get("indicators_analysis", ""))
-    maps_panel = _build_maps_html(maps or {}, digest.get("maps_reading", ""), digest.get("geo_titles_ja", []))
+    maps_panel = _build_maps_html(maps or {}, digest.get("maps_reading", ""))
     papers_panel = _build_papers_html(side.get("research"), digest.get("papers", []))
 
     def stars(n) -> str:
@@ -1105,8 +1088,12 @@ def build_html(digest: dict, articles: list[dict], session_label: str, market_da
             return ""
         return "★" * n + "☆" * (5 - n)
 
-    cards_html = ""
-    for i, item in enumerate(digest.get("articles", []), 1):
+    # 出来事のニュースは地図の下に、俯瞰の解説記事はその後ろに置く
+    all_items = digest.get("articles", [])
+    events = [x for x in all_items if (x.get("surface") or x.get("what_happened"))]
+    essays = [x for x in all_items if x not in events]
+    event_cards = essay_cards = ""
+    for i, item in enumerate(events + essays, 1):
         idx = item.get("index", 0)
         orig = article_map.get(idx, {})
 
@@ -1128,15 +1115,18 @@ def build_html(digest: dict, articles: list[dict], session_label: str, market_da
             <p style="margin:0;font-size:13px;color:#444;line-height:1.85;white-space:pre-line;">{text}</p>
           </div>"""
 
-        # 出来事の記事は「起きたこと」と「読み解き」に分ける。論考（essay）は全体が解釈なので
-        # 見出しを付けず一本で出す。旧形式（summary_ja 一本）も壊さない。
-        what, reading = item.get("what_happened", ""), item.get("reading", "")
-        if what:
-            body_html = block("起きたこと", what, "#1a1a2e") + block("読み解き", reading, "#4361ee")
+        # 出来事の記事は「構造 → その表出としての出来事」の順。論考（essay）は全体が解釈なので
+        # 見出しを付けず一本で出す。旧形式（what_happened / summary_ja）も壊さない。
+        structure = item.get("structure", "")
+        surface = item.get("surface") or item.get("what_happened", "")
+        reading = item.get("reading", "")
+        if surface:
+            body_html = (block("構造", structure or reading, "#4361ee")
+                         + block("表出した出来事", surface, "#1a1a2e"))
         else:
             body_html = block("", reading or item.get("summary_ja", ""), "#1a1a2e")
 
-        cards_html += f"""
+        card = f"""
         <div style="background:white;margin:0 0 20px;border-radius:10px;
                     padding:20px 24px;box-shadow:0 1px 5px rgba(0,0,0,0.07);">
           <div style="margin-bottom:8px;display:flex;justify-content:space-between;
@@ -1158,6 +1148,17 @@ def build_html(digest: dict, articles: list[dict], session_label: str, market_da
           </div>
           {body_html}
         </div>"""
+        if surface:
+            event_cards += card
+        else:
+            essay_cards += card
+
+    if essay_cards:
+        essay_cards = ("""
+  <div style="font-size:10px;font-weight:700;color:#6b4fa0;letter-spacing:2px;
+              text-transform:uppercase;margin:4px 0 10px;padding-left:4px;">
+    俯瞰して読む ── 解説
+  </div>""" + essay_cards)
 
     return f"""<!DOCTYPE html>
 <html lang="ja">
@@ -1190,8 +1191,11 @@ def build_html(digest: dict, articles: list[dict], session_label: str, market_da
   <!-- 地図から読む -->
   {maps_panel}
 
-  <!-- Article Cards -->
-  {cards_html}
+  <!-- 地図の下に、出来事のニュース（構造 → その表出） -->
+  {event_cards}
+
+  <!-- 俯瞰して読む：出来事を持たない解説記事 -->
+  {essay_cards}
 
   <!-- 直近の重要論文 -->
   {papers_panel}
@@ -1256,22 +1260,25 @@ def build_tts_script(digest: dict, label: str, headline: str) -> str:
     if maps_reading:
         parts.append("次に、世界地図から。" + maps_reading)
 
-    articles = digest.get("articles", [])
-    if articles:
-        parts.append(f"ここからは、今日の主要ニュース{len(articles)}件です。")
-        for i, item in enumerate(articles, 1):
+    all_items = digest.get("articles", [])
+    ev = [x for x in all_items if (x.get("surface") or x.get("what_happened"))]
+    es = [x for x in all_items if x not in ev]
+    if ev:
+        parts.append(f"ここからは、今日の主要な出来事{len(ev)}件です。")
+        for i, item in enumerate(ev, 1):
             impact = item.get("impact")
             impact_str = f"影響度は5段階中の{int(impact)}。" if impact else ""
-            what = item.get("what_happened", "")
-            reading = item.get("reading", "")
-            if what:
-                body = f"起きたこと。{what} 読み解き。{reading}"
-            else:                              # 論考は見出しを挟まず一本で読む
-                body = reading or item.get("summary_ja", "")
+            surface = item.get("surface") or item.get("what_happened", "")
+            structure = item.get("structure") or item.get("reading", "")
             parts.append(
                 f"{i}件目。{item.get('title_ja','')}。{impact_str}"
-                f"{item.get('unique_point','')} {body}"
+                f"{item.get('unique_point','')} 構造。{structure} 表出した出来事。{surface}"
             )
+    if es:
+        parts.append("ここからは、出来事を俯瞰して読む解説です。")
+        for item in es:
+            body = item.get("reading") or item.get("summary_ja", "")
+            parts.append(f"{item.get('title_ja','')}。{item.get('unique_point','')} {body}")
 
     papers = digest.get("papers", [])
     if papers:
