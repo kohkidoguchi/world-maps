@@ -86,8 +86,7 @@ MAX_REPLIES_PER_RUN  = 5   # 1回の実行で回答する返信の上限（ジ�
 DRY_RUN = "--dry-run" in sys.argv   # 送信せずHTMLをファイルに書き出す（検証用）
 MAX_PER_FEED         = 8    # articles fetched per feed（更新の速いフィードから新着を多めに拾う）
 FRESH_DAYS           = 3    # この日数より古い記事は候補から外す（毎日配信：新着中心、週末明けも拾える幅）
-MAX_TO_CLAUDE        = 90   # cap sent to Claude（全カテゴリを含める。トークン削減で120から縮小）
-SUMMARY_CHARS        = 80   # プロンプトに載せる各記事の要約の上限（選別にはこれで足りる）
+MAX_TO_CLAUDE        = 120  # cap sent to Claude（全カテゴリを含める）
 ARTICLES_IN_DIGEST   = 10   # 取り上げるニュース件数（半分の長さの解説＋星の影響度つき）
 PAPERS_IN_DIGEST     = 2    # 重要論文は候補から1〜2本だけ載せる（候補の羅列はしない）
 
@@ -978,12 +977,10 @@ def _build_prompt(articles: list[dict], session_label: str, edition: str, market
         note = cat_notes.get(cat, "")
         category_sections += f"\n\n### {cat}（この中から{count}件選ぶこと）{' ' + note if note else ''}\n"
         for a in cat_articles:
-            # 要約は「どれを選ぶか」の判断材料なので頭だけで足りる（本文は記事選定後にURL先で読む）
-            summary = (a["summary"] or "")[:SUMMARY_CHARS]
             category_sections += (
                 f"\n[{articles.index(a)+1}] {a['source']}\n"
                 f"Title: {a['title']}\n"
-                f"Summary: {summary}\n"
+                f"Summary: {a['summary']}\n"
             )
 
     slot_summary = "、".join(f"{c}{n}件" for c, n in slots)
@@ -1513,7 +1510,7 @@ def _build_future_prompt(articles: list[dict]) -> str:
     article_blocks = "\n\n".join(
         f"[{i+1}] ({a['category']} / {a['source']})\n"
         f"Title: {a['title']}\n"
-        f"Summary: {(a['summary'] or '')[:SUMMARY_CHARS]}"
+        f"Summary: {a['summary']}"
         for i, a in enumerate(articles)
     )
     return f"""
@@ -1784,7 +1781,7 @@ def answer_reply(subject: str, body: str) -> str:
                       messages=[{"role": "user", "content": prompt}])
         if use_tools:
             kwargs["tools"] = [{"type": "web_search_20250305",
-                                "name": "web_search", "max_uses": 3}]
+                                "name": "web_search", "max_uses": 5}]
         return client.messages.create(**kwargs)
 
     try:
